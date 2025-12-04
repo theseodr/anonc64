@@ -1,175 +1,431 @@
+import { useEffect, useRef, useState } from "react";
+import { Navigate } from "react-router-dom";
+import { Canvas as FabricCanvas } from "fabric";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowRight, Github } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+
+interface Board {
+  id: string;
+  title: string;
+  description: string | null;
+}
+
+interface Message {
+  id: number;
+  content: string;
+  created_at: string;
+  user_id: string | null;
+}
+
+const DEFAULT_BOARD_TITLE = "Global C64 Board";
 
 const Index = () => {
+  const { user, loading, signOut } = useAuth();
+  const [board, setBoard] = useState<Board | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [initialising, setInitialising] = useState(true);
+
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
+
+  // Redirect unauthenticated users to /auth
+  if (!loading && !user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  useEffect(() => {
+    if (!user) return;
+
+    const ensureDefaultBoard = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("boards")
+          .select("id, title, description")
+          .eq("title", DEFAULT_BOARD_TITLE)
+          .maybeSingle();
+
+        if (error) {
+          console.error(error);
+          toast.error("Unable to load board.");
+          setInitialising(false);
+          return;
+        }
+
+        if (data) {
+          setBoard(data as Board);
+          setInitialising(false);
+          return;
+        }
+
+        const { data: created, error: insertError } = await supabase
+          .from("boards")
+          .insert({
+            title: DEFAULT_BOARD_TITLE,
+            visibility: "public",
+            owner_id: user.id,
+          })
+          .select("id, title, description")
+          .single();
+
+        if (insertError) {
+          console.error(insertError);
+          toast.error("Unable to create board.");
+        } else {
+          setBoard(created as Board);
+        }
+      } finally {
+        setInitialising(false);
+      }
+    };
+
+    ensureDefaultBoard();
+  }, [user]);
+
+  // Fabric canvas setup
+  useEffect(() => {
+    if (!board || !canvasRef.current || !canvasContainerRef.current) return;
+
+    const rect = canvasContainerRef.current.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+
+    const canvas = new FabricCanvas(canvasRef.current, {
+      width,
+      height,
+      backgroundColor: "#000000",
+    });
+
+    canvas.isDrawingMode = true;
+    if (canvas.freeDrawingBrush) {
+      canvas.freeDrawingBrush.color = "#00d7d7";
+      canvas.freeDrawingBrush.width = 2;
+    }
+
+    setFabricCanvas(canvas);
+
+    return () => {
+      canvas.dispose();
+      setFabricCanvas(null);
+    };
+  }, [board]);
+
+  // Load latest board state into Fabric
+  useEffect(() => {
+    if (!board || !fabricCanvas) return;
+
+    const loadLatestSnapshot = async () => {
+      const { data, error } = await supabase
+        .from("strokes")
+        .select("path_data")
+        .eq("board_id", board.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      if (data?.path_data) {
+        try {
+          fabricCanvas.loadFromJSON(data.path_data, () => {
+            fabricCanvas.renderAll();
+          });
+        } catch (err) {
+          console.error("Failed to load canvas state", err);
+        }
+      } else {
+        fabricCanvas.clear();
+        fabricCanvas.setBackgroundColor("#000000", () => fabricCanvas.renderAll());
+      }
+    };
+
+    loadLatestSnapshot();
+  }, [board, fabricCanvas]);
+
+  // Persist strokes on draw
+  useEffect(() => {
+    if (!board || !fabricCanvas || !user) return;
+
+    const handlePathCreated = async () => {
+      try {
+        const json = fabricCanvas.toJSON();
+        const { error } = await supabase.from("strokes").insert({
+          board_id: board.id,
+          user_id: user.id,
+          path_data: json,
+          color: "#00d7d7",
+          width: 2,
+        });
+        if (error) {
+          console.error(error);
+          toast.error("Failed to save stroke.");
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Error while saving stroke.");
+      }
+    };
+
+    const listener = () => void handlePathCreated();
+
+    fabricCanvas.on("path:created", listener as any);
+
+    return () => {
+      fabricCanvas.off("path:created", listener as any);
+    };
+  }, [board, fabricCanvas, user]);
+
+  // Realtime updates for strokes
+  useEffect(() => {
+    if (!board || !fabricCanvas) return;
+
+    const channel = supabase
+      .channel(`strokes-board-${board.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "strokes",
+          filter: `board_id=eq.${board.id}`,
+        },
+        (payload) => {
+          const next = (payload.new as any)?.path_data;
+          if (!next) return;
+          try {
+            fabricCanvas.loadFromJSON(next, () => {
+              fabricCanvas.renderAll();
+            });
+          } catch (err) {
+            console.error("Failed to apply remote stroke", err);
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [board, fabricCanvas]);
+
+  // Chat: load initial messages
+  useEffect(() => {
+    if (!board) return;
+
+    const loadMessages = async () => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("id, content, created_at, user_id")
+        .eq("board_id", board.id)
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        console.error(error);
+        toast.error("Unable to load chat.");
+      } else {
+        setMessages(data as Message[]);
+      }
+    };
+
+    loadMessages();
+  }, [board]);
+
+  // Chat: realtime inserts
+  useEffect(() => {
+    if (!board) return;
+
+    const channel = supabase
+      .channel(`messages-board-${board.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `board_id=eq.${board.id}`,
+        },
+        (payload) => {
+          setMessages((prev) => [...prev, payload.new as Message]);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [board]);
+
+  const handleSendMessage = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!board || !newMessage.trim()) return;
+
+    const content = newMessage.trim();
+    setNewMessage("");
+
+    const { error } = await supabase.from("messages").insert({
+      board_id: board.id,
+      user_id: user?.id ?? null,
+      content,
+    });
+
+    if (error) {
+      console.error(error);
+      toast.error("Failed to send message.");
+    }
+  };
+
+  const handleClearBoard = async () => {
+    if (!board || !fabricCanvas || !user) return;
+
+    fabricCanvas.clear();
+    fabricCanvas.setBackgroundColor("#000000", () => fabricCanvas.renderAll());
+
+    const json = fabricCanvas.toJSON();
+    const { error } = await supabase.from("strokes").insert({
+      board_id: board.id,
+      user_id: user.id,
+      path_data: json,
+      color: "#00d7d7",
+      width: 2,
+    });
+
+    if (error) {
+      console.error(error);
+      toast.error("Failed to clear board state.");
+    }
+  };
+
+  if (initialising || loading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
+        <p className="text-sm text-muted-foreground">Loading collaborative board…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="relative isolate mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-8 sm:px-6 lg:px-8">
-        {/* Ambient glow and grid */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] bg-hero-grid opacity-80" />
-        <div className="pointer-events-none absolute inset-0 -z-20 bg-[radial-gradient(circle_at_top,_hsl(var(--primary))/0.16,_transparent_55%)]" />
-
-        <header className="mb-10 flex items-center justify-between gap-4">
+      <main className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+        <header className="mb-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-secondary/60 shadow-soft">
               <span className="text-xs font-mono tracking-[0.22em] text-primary">C64</span>
             </div>
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Retro Static Studio
-              </p>
-              <p className="text-xs text-muted-foreground/80">React · Vite · Tailwind</p>
+              <p className="text-sm font-mono uppercase tracking-[0.22em] text-muted-foreground">Global Board</p>
+              <p className="text-xs text-muted-foreground/80">Collaborative C64 whiteboard &amp; chat</p>
             </div>
           </div>
-
-          <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-            <a href="#features" className="transition-colors hover:text-foreground">
-              Features
-            </a>
-            <a href="#workflow" className="transition-colors hover:text-foreground">
-              Workflow
-            </a>
-            <a href="#deploy" className="transition-colors hover:text-foreground">
-              Deploy
-            </a>
-            <Button asChild variant="outline" size="sm">
-              <a href="https://github.com" target="_blank" rel="noreferrer">
-                <Github className="mr-2" />
-                View Repo
-              </a>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="hidden sm:inline">{user.email}</span>
+            <Button size="sm" variant="outline" onClick={signOut}>
+              Sign out
             </Button>
-          </nav>
+          </div>
         </header>
 
-        <main className="mb-12 grid flex-1 items-center gap-10 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-          <section aria-labelledby="hero-heading">
-            <div className="mb-4 inline-flex items-center gap-3 rounded-full border border-border/60 bg-secondary/40 px-4 py-1 text-xs font-mono uppercase tracking-[0.26em] text-muted-foreground backdrop-blur">
-              <span className="h-2 w-2 animate-pulse-glow rounded-full bg-primary" />
-              <span>Optimised for static web servers</span>
-            </div>
-            <h1
-              id="hero-heading"
-              className="mb-4 max-w-xl text-4xl font-semibold leading-tight tracking-tight sm:text-5xl lg:text-6xl"
-            >
-              C64-inspired static site, rebuilt for modern stacks.
-            </h1>
-            <p className="mb-8 max-w-xl text-base text-muted-foreground sm:text-lg">
-              A single-page React experience with a retro soul—bundled by Vite, styled with Tailwind, and ready to drop
-              into any static host from Nginx to Netlify.
-            </p>
-            <div className="flex flex-wrap items-center gap-4">
-              <Button size="lg" variant="hero" className="group">
-                <span>Build &amp; preview</span>
-                <ArrowRight className="transition-transform group-hover:translate-x-1" />
-              </Button>
-              <Button size="lg" variant="ghost" className="border border-dashed border-border/70">
-                Static-first architecture
-              </Button>
-            </div>
-            <dl className="mt-8 grid gap-6 text-sm text-muted-foreground sm:grid-cols-3">
-              <div>
-                <dt className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground/80">Stack</dt>
-                <dd className="mt-1">React · Vite · Tailwind</dd>
-              </div>
-              <div>
-                <dt className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground/80">Hosting</dt>
-                <dd className="mt-1">Any static web server</dd>
-              </div>
-              <div>
-                <dt className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground/80">Bundle</dt>
-                <dd className="mt-1">Single-page app</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section aria-label="Preview of the static site" className="lg:justify-self-end">
-            <Card className="relative overflow-hidden border-border/70 bg-card/80 shadow-soft backdrop-blur-sm transition duration-500 hover:-translate-y-1 hover:shadow-glow">
-              <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(circle_at_0_0,_hsl(var(--accent))/0.45,_transparent_55%)]" />
-              <CardHeader className="relative pb-4">
-                <CardTitle className="flex items-center justify-between text-base font-mono uppercase tracking-[0.28em]">
-                  <span>STATIC PREVIEW</span>
-                  <span className="rounded-md bg-secondary/60 px-2 py-1 text-[0.65rem] font-normal text-secondary-foreground">
-                    LIVE
-                  </span>
+        <section className="flex flex-1 flex-col gap-4 lg:flex-row">
+          <div className="flex-1">
+            <Card className="h-full border-border/70 bg-card/90 shadow-soft">
+              <CardHeader className="pb-3">
+                <CardTitle asChild>
+                  <h1 className="text-xl font-semibold tracking-tight">C64 Whiteboard</h1>
                 </CardTitle>
-                <CardDescription className="mt-3 text-xs">
-                  Simulated above-the-fold view of your retro-flavoured landing page.
+                <CardDescription>
+                  Draw in real time with others. The canvas state is synced through the Lovable backend.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="relative">
-                <div className="overflow-hidden rounded-[1.1rem] border border-border/70 bg-background/80 p-5">
-                  <div className="mb-3 flex items-center gap-2 text-[0.65rem] font-mono uppercase tracking-[0.26em] text-muted-foreground">
-                    <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                    <span>Anon C64 Site</span>
-                  </div>
-                  <p className="mb-2 text-sm font-semibold">
-                    Retro console aesthetic without sacrificing modern tooling.
-                  </p>
-                  <p className="mb-4 text-xs text-muted-foreground">
-                    This project mirrors your static export in a React-first stack, so you can deploy it anywhere you
-                    serve HTML, CSS, and JS.
-                  </p>
-                  <div className="flex flex-wrap gap-2 text-[0.65rem] font-mono uppercase tracking-[0.26em]">
-                    <span className="rounded-full bg-secondary/60 px-3 py-1 text-secondary-foreground">
-                      SINGLE INDEX.HTML
-                    </span>
-                    <span className="rounded-full bg-secondary/40 px-3 py-1 text-secondary-foreground/90">
-                      ZERO SERVER STATE
-                    </span>
-                    <span className="rounded-full bg-secondary/30 px-3 py-1 text-secondary-foreground/90">
-                      BLAZING BUILD
-                    </span>
-                  </div>
+              <CardContent className="space-y-3">
+                <div
+                  ref={canvasContainerRef}
+                  className="relative h-[420px] rounded-md border border-border bg-background/80 sm:h-[520px] lg:h-[560px]"
+                >
+                  <canvas ref={canvasRef} className="h-full w-full" aria-label="Collaborative whiteboard" />
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Drawing mode: freehand (C64 teal)</span>
+                  <Button size="sm" variant="ghost" onClick={handleClearBoard}>
+                    Clear board (snapshot)
+                  </Button>
                 </div>
               </CardContent>
             </Card>
-          </section>
-        </main>
-
-        <section id="features" aria-label="Key features" className="mb-10">
-          <div className="grid gap-6 md:grid-cols-3">
-            <Card className="border-border/70 bg-card/80 shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-base">Retro aesthetic</CardTitle>
-                <CardDescription>
-                  C64-inspired typography, glow and grid with a modern layout system.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-            <Card className="border-border/70 bg-card/80 shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-base">Static by design</CardTitle>
-                <CardDescription>
-                  Vite builds a self-contained bundle that you can host on any static provider.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-            <Card className="border-border/70 bg-card/80 shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-base">Upgrade ready</CardTitle>
-                <CardDescription>
-                  Extend with routing, auth, or APIs later—today it&apos;s just lean, static HTML, CSS, and JS.
-                </CardDescription>
-              </CardHeader>
-            </Card>
           </div>
-        </section>
 
-        <section
-          id="deploy"
-          aria-label="Deployment notes"
-          className="mt-auto border-t border-border/70 pt-6 text-xs text-muted-foreground"
-        >
-          <p>
-            To deploy on a static web server: run
-            <code className="mx-1 rounded border border-border/60 bg-card px-1.5 py-0.5 text-[0.7rem]">npm run build</code>
-            and serve the
-            <code className="mx-1 rounded border border-border/60 bg-card px-1.5 py-0.5 text-[0.7rem]">dist</code>
-            directory with your favourite HTTP server.
-          </p>
+          <aside className="w-full space-y-4 lg:w-[340px]">
+            <Card className="flex h-[360px] flex-col border-border/70 bg-card/90">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-mono uppercase tracking-[0.22em]">Chat</CardTitle>
+                <CardDescription>Coordinate with others while you draw.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-1 flex-col gap-3 pb-3">
+                <div className="flex-1 space-y-2 overflow-y-auto rounded border border-border/70 bg-background/60 p-2 text-xs">
+                  {messages.length === 0 ? (
+                    <p className="text-muted-foreground">No messages yet. Say hi!</p>
+                  ) : (
+                    messages.map((msg) => {
+                      const isSelf = msg.user_id && msg.user_id === user.id;
+                      const who = isSelf ? "You" : "Guest";
+                      const time = new Date(msg.created_at).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      });
+                      return (
+                        <div key={msg.id} className="rounded bg-card/80 px-2 py-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-primary">
+                              {who}
+                            </span>
+                            <span className="text-[0.65rem] text-muted-foreground">{time}</span>
+                          </div>
+                          <p className="mt-0.5 text-[0.78rem] leading-snug">{msg.content}</p>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                <form className="flex items-center gap-2" onSubmit={handleSendMessage} aria-label="Send chat message">
+                  <Input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type a message…"
+                    className="h-9 text-xs"
+                  />
+                  <Button type="submit" size="sm" disabled={!newMessage.trim()}>
+                    Send
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/70 bg-card/90">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-mono uppercase tracking-[0.22em]">Board status</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1 text-xs text-muted-foreground">
+                <p>
+                  <span className="font-mono uppercase tracking-[0.18em] text-foreground">Title:</span> {" "}
+                  {board?.title ?? "Untitled"}
+                </p>
+                <p>
+                  <span className="font-mono uppercase tracking-[0.18em] text-foreground">Visibility:</span> Public
+                </p>
+                <p>
+                  State persists in Lovable Cloud with realtime updates for strokes and chat.
+                </p>
+              </CardContent>
+            </Card>
+          </aside>
         </section>
-      </div>
+      </main>
     </div>
   );
 };
