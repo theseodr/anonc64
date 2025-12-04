@@ -79,8 +79,71 @@
         <span id="user-indicator" aria-live="polite"></span>
       </nav>
       <aside id="connection-panel" aria-label="Connection status">
-        <span id="connection-text">RTC: connecting, Yjs: syncing…, Tor: OFF</span>
+        <span id="connection-text">Canvas: initializing | Chat: idle | Tor: OFF | Video: none</span>
       </aside>
+
+      <button
+        id="help-toggle"
+        type="button"
+        aria-haspopup="dialog"
+        aria-controls="help-overlay"
+        aria-label="Open help overlay"
+      >
+        HELP
+      </button>
+
+      <section
+        id="help-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="help-title"
+        hidden
+      >
+        <div class="help-content">
+          <header>
+            <h2 id="help-title">C64 Whiteboard Guide</h2>
+            <p>Draw, chat, and set the mood with video backdrops — all in your browser.</p>
+          </header>
+          <div class="help-grid" aria-label="Controls overview">
+            <article>
+              <h3>Canvas &amp; drawing</h3>
+              <ul>
+                <li>Move your mouse over the board to draw with the active brush.</li>
+                <li>Use the color picker and size slider in the toolbar to adjust the brush.</li>
+                <li>Use "Clear Board" to wipe all strokes.</li>
+              </ul>
+            </article>
+            <article>
+              <h3>Chat</h3>
+              <ul>
+                <li>Type in the chat box on the right and press Enter to send.</li>
+                <li>Newest messages appear at the bottom of the log.</li>
+              </ul>
+            </article>
+            <article>
+              <h3>Video background</h3>
+              <ul>
+                <li>"Upload Video" loads a local file as the animated background.</li>
+                <li>"YouTube Link" embeds a looping, muted YouTube video behind the board.</li>
+              </ul>
+            </article>
+            <article>
+              <h3>Tor mode</h3>
+              <ul>
+                <li>Tor mode is a local toggle only — it does not contact the Tor network.</li>
+                <li>The status panel shows whether the Tor flag is ON or OFF.</li>
+              </ul>
+            </article>
+          </div>
+          <footer>
+            <label class="help-dont-show">
+              <input type="checkbox" id="help-dont-show" />
+              Don&apos;t show this again on this device
+            </label>
+            <button type="button" id="help-close">Got it</button>
+          </footer>
+        </div>
+      </section>
     </div>
   </body>
 </html>

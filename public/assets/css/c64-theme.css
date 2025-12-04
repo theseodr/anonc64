@@ -39,7 +39,8 @@ body {
 #chat {
   position:absolute;
   top:0; right:0;
-  width:30%; height:100%;
+  bottom:42px;
+  width:30%;
   background:rgba(0,0,0,.85);
   border-left:2px solid var(--c64-accent);
   display:flex;
