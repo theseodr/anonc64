@@ -128,8 +128,18 @@
           aria-label="Toggle Tor mode flag"
           title="Tor mode"
         >🌀</button>
+        <button
+          id="btn-chat-toggle"
+          type="button"
+          aria-pressed="false"
+          aria-label="Hide chat sidebar (Alt+H)"
+          title="Hide chat (Alt+H)"
+        >⬌</button>
         <span id="user-indicator" aria-live="polite"></span>
-        <span id="video-indicator" aria-live="polite">Video: none | Now: - | Queue: 0</span>
+        <span id="video-indicator" aria-live="polite">
+          <span class="video-led video-led--off" aria-hidden="true"></span>
+          <span class="video-indicator-text">Off | Q:0</span>
+        </span>
         <div id="video-controls" aria-label="Background video controls">
           <button
             id="video-play-pause"
