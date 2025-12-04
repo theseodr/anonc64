@@ -33,13 +33,10 @@
     />
 
     <script src="https://cdn.jsdelivr.net/npm/yjs/dist/yjs.min.js"></script>
-    
 
     <script src="https://cdn.jsdelivr.net/npm/y-webrtc/dist/y-webrtc.min.js"></script>
-    
 
     <script src="https://cdn.jsdelivr.net/npm/fabric/dist/fabric.min.js"></script>
-    
 
     <script type="module" src="assets/js/main.js"></script>
 
@@ -52,10 +49,23 @@
       </h1>
       <video id="bg-video" autoplay loop muted playsinline></video>
       <canvas id="whiteboard"></canvas>
-      <section id="chat">
-        <header>🗨️ Anonymous Chat</header>
-        <div id="messages"></div>
-        <input id="msg-input" placeholder="Type a message…" autocomplete="off" />
+      <section id="chat" aria-labelledby="chat-title">
+        <header id="chat-title">🗨️ Anonymous Chat</header>
+        <div
+          id="messages"
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions text"
+          aria-label="Chat messages"
+          tabindex="0"
+        ></div>
+        <label for="msg-input" class="sr-only">Type a message and press Enter to send</label>
+        <input
+          id="msg-input"
+          placeholder="Type a message…"
+          autocomplete="off"
+          aria-label="Chat message input"
+        />
       </section>
       <nav id="toolbar">
         <button id="btn-upload">Upload Video</button>
@@ -71,6 +81,7 @@
         <button id="btn-gif">GIF</button>
         <button id="btn-clear">Clear Board</button>
         <button id="btn-tor">Tor Mode</button>
+        <span id="user-indicator" aria-live="polite"></span>
       </nav>
     </div>
   </body>
