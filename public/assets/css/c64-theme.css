@@ -85,14 +85,19 @@ body {
 /* Toolbar */
 #toolbar {
   position:absolute;
-  bottom:0; left:0;
-  width:100%; height:auto;
+  bottom:0;
+  left:0;
+  width:100%;
+  height:48px;
   background:#111;
   display:flex;
-  flex-wrap:wrap;
-  gap:8px;
+  flex-wrap:nowrap;
+  gap:4px;
   align-items:center;
-  padding:6px;
+  padding:4px 6px;
+  overflow-x:auto;
+  white-space:nowrap;
+  z-index:1;
 }
 #toolbar button,
 #toolbar select,
@@ -101,10 +106,23 @@ body {
   background:#222;
   border:2px solid var(--c64-accent);
   color:var(--c64-fg);
-  padding:4px 8px;
-  font-size:11px;
+  padding:2px 4px;
+  font-size:9px;
   cursor:pointer;
 }
 #toolbar button:hover,
 #toolbar select:hover,
-#toolbar input:hover { background:#333; }
+#toolbar input:hover {
+  background:#333;
+}
+#video-controls {
+  display:flex;
+  align-items:center;
+  gap:4px;
+  font-size:9px;
+}
+#video-controls label {
+  display:flex;
+  align-items:center;
+  gap:2px;
+}
