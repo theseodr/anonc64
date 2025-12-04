@@ -329,7 +329,7 @@ const Index = () => {
               <CardHeader className="pb-3">
                 <CardTitle className="text-xl font-semibold tracking-tight">C64 Whiteboard</CardTitle>
                 <CardDescription>
-                  Draw in real time with others. The canvas state is synced through the Lovable backend.
+                  Draw in real time with others. The canvas state is synced through the Commodore 64k backend.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -399,15 +399,13 @@ const Index = () => {
               </CardHeader>
               <CardContent className="space-y-1 text-xs text-muted-foreground">
                 <p>
-                  <span className="font-mono uppercase tracking-[0.18em] text-foreground">Title:</span> {" "}
+                  <span className="font-mono uppercase tracking-[0.18em] text-foreground">Title:</span>{" "}
                   {board?.title ?? "Untitled"}
                 </p>
                 <p>
                   <span className="font-mono uppercase tracking-[0.18em] text-foreground">Visibility:</span> Public
                 </p>
-                <p>
-                  State persists in Lovable Cloud with realtime updates for strokes and chat.
-                </p>
+                <p>State persists in Lovable Cloud with realtime updates for strokes and chat.</p>
               </CardContent>
             </Card>
           </aside>
