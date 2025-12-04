@@ -495,6 +495,7 @@ const initC64App = async () => {
   const btnYoutube = document.getElementById('btn-youtube');
   const btnSticker = document.getElementById('btn-sticker');
   const btnGif     = document.getElementById('btn-gif');
+  const btnExport  = document.getElementById('btn-export');
   const videoIndicator = document.getElementById('video-indicator');
   const videoPlayPause = document.getElementById('video-play-pause');
   const videoVolume = document.getElementById('video-volume');
@@ -523,6 +524,29 @@ const initC64App = async () => {
   btnClear?.addEventListener('click', () => {
     canvas.clear();
     yCanvas.clear();
+  });
+
+  btnExport?.addEventListener('click', () => {
+    try {
+      const dataUrl = canvas.toDataURL({ format: 'png' });
+      if (!dataUrl) {
+        alert('Unable to export whiteboard image.');
+        return;
+      }
+      const now = new Date();
+      const pad = (n) => n.toString().padStart(2, '0');
+      const filename = `c64-board-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.png`;
+
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('[Export] Failed to export canvas', err);
+      alert('Export failed.');
+    }
   });
 
   btnTor?.addEventListener('click', () => {
