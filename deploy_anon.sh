@@ -43,6 +43,10 @@ fi
 read -rp "HTTP base URL for health check [https://${SSH_HOST}]: " HTTP_BASE
 HTTP_BASE=${HTTP_BASE:-"https://${SSH_HOST}"}
 
+# Optional: PHP error log path on remote server (for log health check)
+read -rp "Remote PHP error log path (leave empty to skip log check): " PHP_ERROR_LOG
+PHP_ERROR_LOG=${PHP_ERROR_LOG:-""}
+
 echo
 echo "Checking required tools..."
 for bin in npm rsync ssh curl; do
@@ -152,6 +156,42 @@ if curl -fsS "${HTTP_BASE}/api/list_messages.php" >/dev/null; then
 else
   echo "[FAIL] API /api/list_messages.php NOT reachable."
   HEALTH_OK=false
+fi
+
+# --- Remote permissions + PHP error log checks -----------------------------
+echo
+echo "Checking remote file permissions under ${WEBROOT}..."
+ssh "${SSH_USER}@${SSH_HOST}" "\
+  echo '  -> Listing ${WEBROOT}/api (if present)'; \
+  if [ -d '${WEBROOT}/api' ]; then \
+    ls -ld '${WEBROOT}/api'; \
+    ls -l '${WEBROOT}/api' | head -n 20; \
+    if [ -f '${WEBROOT}/api/data.sqlite' ]; then \
+      echo '  -> data.sqlite permissions:'; \
+      ls -l '${WEBROOT}/api/data.sqlite'; \
+    else \
+      echo '  -> data.sqlite not found (will be created on first write).'; \
+    fi; \
+  else \
+    echo '  -> No api directory at ${WEBROOT}/api'; \
+  fi" || {
+  echo "[WARNING] Remote permissions check failed (SSH error)."
+}
+
+echo
+if [[ -n "${PHP_ERROR_LOG}" ]]; then
+  echo "Checking PHP error log at ${PHP_ERROR_LOG} (last 20 lines, if exists)..."
+  ssh "${SSH_USER}@${SSH_HOST}" "\
+    if [ -f '${PHP_ERROR_LOG}' ]; then \
+      echo '  -> Found PHP error log. Recent entries:'; \
+      tail -n 20 '${PHP_ERROR_LOG}'; \
+    else \
+      echo '  -> No file found at ${PHP_ERROR_LOG}'; \
+    fi" || {
+    echo "[WARNING] PHP error log check failed (SSH error)."
+  }
+else
+  echo "Skipping PHP error log check (no path provided)."
 fi
 
 cat <<EOF
