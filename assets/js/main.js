@@ -3,7 +3,6 @@
    ------------------------------------------------------------------ */
 
 import * as Y from 'yjs';
-import { WebrtcProvider } from 'y-webrtc';
 import * as fabric from 'fabric';
 import { torFetch, setTorEnabled, torEnabled } from './lib/tor-client.js';
 
@@ -48,17 +47,12 @@ const getColorForClient = (clientId) => {
 };
 
 const initC64App = async () => {
-  // Initialize Yjs document & WebRTC provider
+  // Initialize Yjs document (local-only, no WebRTC in this build)
   const ydoc = new Y.Doc();
-  const webrtcProvider = new WebrtcProvider('anon-c64-room', ydoc, {});
 
   // Shared data structures
   const yChat   = ydoc.getText('chat');   // chat log (plain text)
   const yCanvas = ydoc.getMap('canvas'); // whiteboard objects
-
-  // Connection status tracking
-  let webrtcStatus = 'connecting';
-  let yjsSynced = false;
 
   const connPanel = document.getElementById('connection-panel');
   const connText  = document.getElementById('connection-text');
@@ -66,21 +60,9 @@ const initC64App = async () => {
   const renderConnectionStatus = () => {
     if (!connText) return;
     const torStatus = torEnabled ? 'ON' : 'OFF';
-    const syncLabel = yjsSynced ? 'synced' : 'syncing…';
-    connText.textContent = `RTC: ${webrtcStatus}, Yjs: ${syncLabel}, Tor: ${torStatus}`;
+    connText.textContent = `RTC: disabled, Yjs: local-only, Tor: ${torStatus}`;
   };
-
-  webrtcProvider.on('status', (event) => {
-    if (event && event.status) {
-      webrtcStatus = event.status;
-      renderConnectionStatus();
-    }
-  });
-
-  webrtcProvider.on('synced', (synced) => {
-    yjsSynced = !!synced;
-    renderConnectionStatus();
-  });
+  renderConnectionStatus();
 
   // Per-user drawing identity
   const clientId = ydoc.clientID;
