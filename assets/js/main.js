@@ -12,13 +12,39 @@ const generateStrokeId = () => {
 };
 
 /**
- * Derive a stable HSL color for a given Yjs client ID so that
- * each user has a distinct stroke color across sessions.
+ * Derive a stable, per-user stroke color as a HEX string so it
+ * can be used both by Fabric and <input type="color">.
  */
+const hslToHex = (h, s, l) => {
+  s /= 100;
+  l /= 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+
+  let r = 0, g = 0, b = 0;
+  if (h < 60) {
+    r = c; g = x; b = 0;
+  } else if (h < 120) {
+    r = x; g = c; b = 0;
+  } else if (h < 180) {
+    r = 0; g = c; b = x;
+  } else if (h < 240) {
+    r = 0; g = x; b = c;
+  } else if (h < 300) {
+    r = x; g = 0; b = c;
+  } else {
+    r = c; g = 0; b = x;
+  }
+
+  const toHex = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+};
+
 const getColorForClient = (clientId) => {
   const base = typeof clientId === 'number' ? clientId : Number(clientId) || 0;
   const hue = (base * 47) % 360;
-  return `hsl(${hue}, 80%, 60%)`;
+  return hslToHex(hue, 80, 60);
 };
 
 const initC64App = async () => {
@@ -124,6 +150,7 @@ const initC64App = async () => {
     path.set('authorColor', userColor);
 
     const obj = path.toObject(['stroke', 'strokeWidth', 'id', 'authorId', 'authorColor']);
+    console.log('[Draw] path created', { id, clientId, color: userColor });
     yCanvas.set(id, obj);
   });
 
@@ -159,8 +186,10 @@ const initC64App = async () => {
 
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter' && input.value.trim()) {
+      const msg = input.value.trim();
+      console.log('[Chat] sending message', msg);
       const ts = new Date().toLocaleTimeString();
-      yChat.insert(yChat.length, `${ts}|${input.value}\n`);
+      yChat.insert(yChat.length, `${ts}|${msg}\n`);
       input.value = '';
     }
   });
