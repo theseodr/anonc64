@@ -89,6 +89,7 @@ const initC64App = async () => {
   let chatMessagesCount = 0;
   let videoState = 'none'; // 'none' | 'local' | 'youtube'
   let currentTool = 'free';
+  let currentVideoIndex = 0;
 
   const hasBackend = !!API_BASE;
   let chatMessages = [];
@@ -502,13 +503,49 @@ const initC64App = async () => {
   const videoSeek = document.getElementById('video-seek');
   const chatEl = document.getElementById('chat');
   const chatResizer = document.getElementById('chat-resizer');
+  const btnChatToggle = document.getElementById('btn-chat-toggle');
 
   if (!btnClear || !btnTor || !brushColor || !brushSize || !shapeSel ||
       !btnUpload || !btnYoutube || !btnSticker || !btnGif) {
     console.warn('C64 init warning: some toolbar elements missing');
   }
 
-  // Make chat sidebar width adjustable via drag handle
+  // Make chat sidebar width adjustable via drag handle and allow hiding
+  let isChatHidden = false;
+
+  const applyChatVisibility = () => {
+    document.body.classList.toggle('chat-hidden', isChatHidden);
+
+    if (chatEl) {
+      chatEl.style.display = isChatHidden ? 'none' : '';
+    }
+    if (chatResizer) {
+      chatResizer.style.display = isChatHidden ? 'none' : '';
+    }
+    if (whiteboardEl instanceof HTMLElement) {
+      whiteboardEl.style.right = isChatHidden ? '0' : 'var(--c64-chat-width)';
+    }
+    if (bgVideo instanceof HTMLElement) {
+      bgVideo.style.right = isChatHidden ? '0' : 'var(--c64-chat-width)';
+    }
+
+    if (btnChatToggle) {
+      btnChatToggle.setAttribute('aria-pressed', isChatHidden ? 'true' : 'false');
+      btnChatToggle.setAttribute(
+        'aria-label',
+        isChatHidden ? 'Show chat sidebar (Alt+H)' : 'Hide chat sidebar (Alt+H)'
+      );
+      btnChatToggle.title = isChatHidden ? 'Show chat (Alt+H)' : 'Hide chat (Alt+H)';
+    }
+
+    resizeCanvas();
+  };
+
+  const toggleChatVisibility = () => {
+    isChatHidden = !isChatHidden;
+    applyChatVisibility();
+  };
+
   if (chatEl && chatResizer) {
     let isResizing = false;
 
@@ -533,11 +570,12 @@ const initC64App = async () => {
 
       const newChatWidthPx = viewportWidth - clientX;
       let newChatWidthPct = (newChatWidthPx / viewportWidth) * 100;
-      const minPct = 18;
-      const maxPct = 55;
+      const minPct = 14;
+      const maxPct = 60;
       if (newChatWidthPct < minPct) newChatWidthPct = minPct;
       if (newChatWidthPct > maxPct) newChatWidthPct = maxPct;
       document.documentElement.style.setProperty('--c64-chat-width', `${newChatWidthPct}%`);
+      resizeCanvas();
     };
 
     chatResizer.addEventListener('mousedown', startResize);
@@ -547,6 +585,10 @@ const initC64App = async () => {
     window.addEventListener('mouseup', stopResize);
     window.addEventListener('touchend', stopResize);
   }
+
+  btnChatToggle?.addEventListener('click', () => {
+    toggleChatVisibility();
+  });
 
   // Reflect per-user color in the toolbar UI
   if (brushColor) {
@@ -616,6 +658,28 @@ const initC64App = async () => {
   let currentVideoObjectUrl = null;
   const videoQueue = [];
 
+  const updateVideoIndicator = () => {
+    if (!videoIndicator) return;
+    const queueCount = videoQueue.length;
+    let stateLabel = 'Off';
+    let ledClass = 'off';
+
+    if (videoState === 'local') {
+      stateLabel = 'Local';
+      ledClass = 'local';
+    } else if (videoState === 'youtube') {
+      stateLabel = 'YouTube';
+      ledClass = 'youtube';
+    }
+
+    const queueLabel = `Q:${queueCount}`;
+    videoIndicator.innerHTML =
+      `<span class="video-led video-led--${ledClass}" aria-hidden="true"></span>` +
+      `<span class="video-indicator-text">${stateLabel} | ${queueLabel}</span>`;
+  };
+
+  updateVideoIndicator();
+
   const playObjectUrl = (url) => {
     if (!bgVideo || !url) return;
     console.log('[Video] Playing background video.');
@@ -623,6 +687,7 @@ const initC64App = async () => {
     bgVideo.play().catch(err => console.error('[Video] play() failed', err));
     videoState = 'local';
     renderConnectionStatus();
+    updateVideoIndicator();
   };
 
   const playNextVideoInQueue = () => {
@@ -634,6 +699,7 @@ const initC64App = async () => {
     if (!nextUrl) {
       videoState = 'none';
       renderConnectionStatus();
+      updateVideoIndicator();
       return;
     }
     currentVideoObjectUrl = nextUrl;
@@ -672,6 +738,8 @@ const initC64App = async () => {
         videoQueue.push(objectUrl);
         console.log('[Video] Queued additional background video. Queue length:', videoQueue.length);
       }
+
+      updateVideoIndicator();
     });
 
     fileInput.click();
@@ -757,6 +825,20 @@ const initC64App = async () => {
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && helpOverlay && !helpOverlay.hidden) {
       setHelpVisibility(false);
+      return;
+    }
+
+    if (event.altKey && (event.key === 'h' || event.key === 'H')) {
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target && target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      toggleChatVisibility();
     }
   });
 
