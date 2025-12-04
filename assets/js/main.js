@@ -80,6 +80,15 @@ const initC64App = async () => {
     isDrawingMode: true,
     selection: false
   });
+
+  // Ensure a drawing brush exists for Fabric v6
+  if (!canvas.freeDrawingBrush) {
+    canvas.isDrawingMode = true;
+    // PencilBrush is the default free drawing tool
+    // @ts-ignore - PencilBrush is available on the fabric namespace at runtime
+    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+  }
+
   canvas.freeDrawingBrush.width = 2;
   canvas.freeDrawingBrush.color = userColor;
 
