@@ -41,8 +41,19 @@ body {
   bottom:42px;
   width:auto;
   height:auto;
-  cursor:crosshair;
+  cursor:url("/assets/images/c64-paint-can.png") 0 16, crosshair;
 }
+
+/* Subtle overlay to show the exact active drawing area (matches canvas bounds) */
+#whiteboard::after {
+  content:"";
+  position:absolute;
+  inset:0;
+  border:1px dashed var(--c64-accent);
+  pointer-events:none;
+  opacity:0.6;
+}
+
 
 /* Chat pane */
 #chat {
