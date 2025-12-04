@@ -126,3 +126,22 @@ body {
   align-items:center;
   gap:2px;
 }
+
+#connection-panel,
+#backend-panel {
+  position:absolute;
+  left:0;
+  right:30%;
+  background:rgba(0,0,0,.85);
+  font-size:9px;
+  padding:2px 6px;
+  border-bottom:1px solid var(--c64-accent);
+  z-index:2;
+}
+#connection-panel {
+  top:0;
+}
+#backend-panel {
+  top:20px;
+  border-top:1px solid var(--c64-muted);
+}

@@ -83,10 +83,13 @@
           <label>Vol: <input type="range" id="video-volume" min="0" max="1" step="0.05" value="0" /></label>
           <label>Seek: <input type="range" id="video-seek" min="0" max="100" value="0" /></label>
         </div>
-      </nav>
-      <aside id="connection-panel" aria-label="Connection status">
-        <span id="connection-text">Canvas: initializing | Chat: idle | Tor: OFF | Video: none</span>
-      </aside>
+       </nav>
+       <aside id="connection-panel" aria-label="Connection status">
+         <span id="connection-text">Canvas: initializing | Chat: idle | Tor: OFF | Video: none</span>
+       </aside>
+       <aside id="backend-panel" aria-label="Backend status">
+         <span id="backend-text">Host: - | Mode: local-only | Backend: disabled | Last API success: never</span>
+       </aside>
 
       <button
         id="help-toggle"

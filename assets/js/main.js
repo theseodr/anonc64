@@ -93,7 +93,49 @@ const initC64App = async () => {
   const hasBackend = !!API_BASE;
   let chatMessages = [];
   let lastChatTimestamp = 0;
+  let lastStrokeTimestamp = 0;
 
+  let lastApiSuccessAt = null;
+  let backendReachable = hasBackend ? null : false;
+
+  const backendPanel = document.getElementById('backend-panel');
+  const backendText  = document.getElementById('backend-text');
+
+  const renderBackendDebug = () => {
+    if (!backendText) return;
+    const host = window.location.hostname || 'unknown';
+    const mode = hasBackend ? 'PHP mode' : 'local-only';
+
+    let backendLabel;
+    if (!hasBackend) {
+      backendLabel = 'disabled (local preview)';
+    } else if (backendReachable === null) {
+      backendLabel = 'checking';
+    } else if (backendReachable) {
+      backendLabel = 'OK';
+    } else {
+      backendLabel = 'unreachable';
+    }
+
+    const lastTs = lastApiSuccessAt
+      ? new Date(lastApiSuccessAt).toLocaleTimeString()
+      : 'never';
+
+    backendText.textContent =
+      `Host: ${host} | Mode: ${mode} | Backend: ${backendLabel} | Last API success: ${lastTs}`;
+  };
+
+  const callApi = async (path, options = {}) => {
+    const result = await apiFetch(path, options);
+    if (result !== null && hasBackend) {
+      backendReachable = true;
+      lastApiSuccessAt = Date.now();
+    } else if (hasBackend) {
+      backendReachable = false;
+    }
+    renderBackendDebug();
+    return result;
+  };
 
   const renderConnectionStatus = () => {
     if (!connText) return;
@@ -107,10 +149,15 @@ const initC64App = async () => {
       videoState === 'local' ? 'local video' :
       videoState === 'youtube' ? 'YouTube' :
       'none';
+    const backendStatus =
+      !hasBackend ? 'local-only' :
+      backendReachable === null ? 'checking' :
+      backendReachable ? 'OK' : 'unreachable';
 
     connText.textContent =
-      `Canvas: ${canvasStatus} | Chat: ${chatStatus} | Tor: ${torStatus} | Video: ${videoStatus}`;
+      `Canvas: ${canvasStatus} | Chat: ${chatStatus} | Tor: ${torStatus} | Video: ${videoStatus} | Backend: ${backendStatus}`;
   };
+  renderBackendDebug();
   renderConnectionStatus();
 
   // Per-user drawing identity
@@ -259,6 +306,9 @@ const initC64App = async () => {
     const obj = activeShape.toObject(['stroke', 'strokeWidth', 'id', 'authorId', 'authorColor', 'radius', 'width', 'height']);
     console.log('[Draw] shape created', { id, clientId, tool: currentTool, color: userColor });
     yCanvas.set(id, obj);
+    if (hasBackend) {
+      persistStrokeToBackend(id, obj);
+    }
 
     activeShape = null;
   });
@@ -366,7 +416,7 @@ const initC64App = async () => {
 
   const pollMessages = async () => {
     if (!hasBackend) return;
-    const data = await apiFetch('/list_messages.php?since=' + lastChatTimestamp);
+    const data = await callApi('/list_messages.php?since=' + lastChatTimestamp);
     if (!data || !Array.isArray(data.messages)) return;
     let changed = false;
     for (const m of data.messages) {
@@ -399,7 +449,7 @@ const initC64App = async () => {
     if (hasBackend) {
       console.log('[Chat] sending message via backend', trimmed);
       const payload = { text: trimmed };
-      const result = await apiFetch('/send_message.php', {
+      const result = await callApi('/send_message.php', {
         method: 'POST',
         body: JSON.stringify(payload),
       });
