@@ -80,9 +80,7 @@ const Auth = () => {
       <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-8">
         <Card className="border-border/70 bg-card/90 shadow-soft">
           <CardHeader>
-            <CardTitle asChild>
-              <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-            </CardTitle>
+            <CardTitle className="text-2xl font-semibold tracking-tight">{title}</CardTitle>
             <CardDescription>{description}</CardDescription>
           </CardHeader>
           <CardContent>

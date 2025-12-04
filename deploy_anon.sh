@@ -78,16 +78,11 @@ if [[ ! -d dist ]]; then
   exit 1
 fi
 
-if [[ ! -d api ]]; then
-  echo "[WARNING] 'api/' directory not found. PHP endpoints will not be deployed."
-fi
+# Legacy PHP api/ deployment removed - Lovable backend handles data.
 
 echo "About to deploy to (${ENV_NAME}): ${SSH_USER}@${SSH_HOST}:${WEBROOT}"
 echo "Will rsync (with backup before --delete):"
 echo "  - dist/ -> ${WEBROOT}/"
-if [[ -d api ]]; then
-  echo "  - api/  -> ${WEBROOT}/api/"
-fi
 read -rp "Proceed with backup + rsync deploy? [y/N] " CONFIRM
 CONFIRM=${CONFIRM:-N}
 if [[ "${CONFIRM,,}" != "y" ]]; then
@@ -117,11 +112,7 @@ echo
 echo "Syncing frontend (dist/)..."
 rsync -av --delete dist/ "${SSH_USER}@${SSH_HOST}:${WEBROOT}/"
 
-if [[ -d api ]]; then
-  echo
-  echo "Syncing PHP API (api/)..."
-  rsync -av api/ "${SSH_USER}@${SSH_HOST}:${WEBROOT}/api/"
-fi
+# Legacy PHP API sync removed - only frontend is deployed now.
 
 # --- Optional remote ls ----------------------------------------------------
 echo
@@ -144,55 +135,11 @@ else
   HEALTH_OK=false
 fi
 
-if curl -fsS "${HTTP_BASE}/api/list_strokes.php" >/dev/null; then
-  echo "[OK] API /api/list_strokes.php reachable."
-else
-  echo "[FAIL] API /api/list_strokes.php NOT reachable."
-  HEALTH_OK=false
-fi
+# Skipping legacy PHP API health checks; Lovable Cloud backend handles data.
 
-if curl -fsS "${HTTP_BASE}/api/list_messages.php" >/dev/null; then
-  echo "[OK] API /api/list_messages.php reachable."
-else
-  echo "[FAIL] API /api/list_messages.php NOT reachable."
-  HEALTH_OK=false
-fi
-
-# --- Remote permissions + PHP error log checks -----------------------------
+# --- Backend checks -----------------------------------------------------------
 echo
-echo "Checking remote file permissions under ${WEBROOT}..."
-ssh "${SSH_USER}@${SSH_HOST}" "\
-  echo '  -> Listing ${WEBROOT}/api (if present)'; \
-  if [ -d '${WEBROOT}/api' ]; then \
-    ls -ld '${WEBROOT}/api'; \
-    ls -l '${WEBROOT}/api' | head -n 20; \
-    if [ -f '${WEBROOT}/api/data.sqlite' ]; then \
-      echo '  -> data.sqlite permissions:'; \
-      ls -l '${WEBROOT}/api/data.sqlite'; \
-    else \
-      echo '  -> data.sqlite not found (will be created on first write).'; \
-    fi; \
-  else \
-    echo '  -> No api directory at ${WEBROOT}/api'; \
-  fi" || {
-  echo "[WARNING] Remote permissions check failed (SSH error)."
-}
-
-echo
-if [[ -n "${PHP_ERROR_LOG}" ]]; then
-  echo "Checking PHP error log at ${PHP_ERROR_LOG} (last 20 lines, if exists)..."
-  ssh "${SSH_USER}@${SSH_HOST}" "\
-    if [ -f '${PHP_ERROR_LOG}' ]; then \
-      echo '  -> Found PHP error log. Recent entries:'; \
-      tail -n 20 '${PHP_ERROR_LOG}'; \
-    else \
-      echo '  -> No file found at ${PHP_ERROR_LOG}'; \
-    fi" || {
-    echo "[WARNING] PHP error log check failed (SSH error)."
-  }
-else
-  echo "Skipping PHP error log check (no path provided)."
-fi
+echo "Skipping legacy PHP API permission and log checks; Lovable Cloud backend is used."
 
 cat <<EOF
 
