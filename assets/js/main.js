@@ -500,10 +500,52 @@ const initC64App = async () => {
   const videoPlayPause = document.getElementById('video-play-pause');
   const videoVolume = document.getElementById('video-volume');
   const videoSeek = document.getElementById('video-seek');
+  const chatEl = document.getElementById('chat');
+  const chatResizer = document.getElementById('chat-resizer');
 
   if (!btnClear || !btnTor || !brushColor || !brushSize || !shapeSel ||
       !btnUpload || !btnYoutube || !btnSticker || !btnGif) {
     console.warn('C64 init warning: some toolbar elements missing');
+  }
+
+  // Make chat sidebar width adjustable via drag handle
+  if (chatEl && chatResizer) {
+    let isResizing = false;
+
+    const startResize = (event) => {
+      isResizing = true;
+      document.body.style.cursor = 'col-resize';
+      event.preventDefault();
+    };
+
+    const stopResize = () => {
+      if (!isResizing) return;
+      isResizing = false;
+      document.body.style.cursor = '';
+    };
+
+    const onResizeMove = (event) => {
+      if (!isResizing) return;
+      const point = event.touches && event.touches[0] ? event.touches[0] : event;
+      const clientX = point.clientX;
+      const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+      if (!viewportWidth || !clientX) return;
+
+      const newChatWidthPx = viewportWidth - clientX;
+      let newChatWidthPct = (newChatWidthPx / viewportWidth) * 100;
+      const minPct = 18;
+      const maxPct = 55;
+      if (newChatWidthPct < minPct) newChatWidthPct = minPct;
+      if (newChatWidthPct > maxPct) newChatWidthPct = maxPct;
+      document.documentElement.style.setProperty('--c64-chat-width', `${newChatWidthPct}%`);
+    };
+
+    chatResizer.addEventListener('mousedown', startResize);
+    chatResizer.addEventListener('touchstart', startResize, { passive: false });
+    window.addEventListener('mousemove', onResizeMove);
+    window.addEventListener('touchmove', onResizeMove, { passive: false });
+    window.addEventListener('mouseup', stopResize);
+    window.addEventListener('touchend', stopResize);
   }
 
   // Reflect per-user color in the toolbar UI

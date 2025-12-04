@@ -44,8 +44,16 @@
       </h1>
       <video id="bg-video" autoplay loop muted playsinline></video>
       <canvas id="whiteboard"></canvas>
+      <div
+        id="chat-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize chat panel"
+      ></div>
       <section id="chat" aria-labelledby="chat-title">
-        <header id="chat-title">🗨️ Anonymous Chat</header>
+        <header id="chat-title">
+          🗨️ Anonymous Chat
+        </header>
         <div
           id="messages"
           role="log"
@@ -63,28 +71,91 @@
         />
       </section>
       <nav id="toolbar">
-         <button id="btn-upload">Upload Video</button>
-         <button id="btn-youtube">YouTube Link</button>
-         <label>✏️ Brush: <input type="color" id="brush-color" value="#00d7d7" /></label>
-         <label>Size: <input type="range" id="brush-size" min="1" max="10" value="2" /></label>
-         <select id="shape-select">
-           <option value="free">Free draw</option>
-           <option value="rect">Rectangle</option>
-           <option value="circle">Circle</option>
-         </select>
-         <button id="btn-sticker">Sticker (PNG)</button>
-         <button id="btn-gif">GIF</button>
-         <button id="btn-clear">Clear Board</button>
-         <button id="btn-export" aria-label="Export whiteboard as PNG">Export PNG</button>
-         <button id="btn-tor">Tor Mode</button>
+        <button
+          id="btn-upload"
+          type="button"
+          aria-label="Upload video file"
+          title="Upload video file"
+        >📼</button>
+        <button
+          id="btn-youtube"
+          type="button"
+          aria-label="Use YouTube background video"
+          title="YouTube background"
+        >▶</button>
+        <label>
+          <span aria-hidden="true">✏️</span>
+          <span class="sr-only">Brush color</span>
+          <input type="color" id="brush-color" value="#00d7d7" />
+        </label>
+        <label>
+          <span aria-hidden="true">⤧</span>
+          <span class="sr-only">Brush size</span>
+          <input type="range" id="brush-size" min="1" max="10" value="2" />
+        </label>
+        <select id="shape-select" aria-label="Drawing mode">
+          <option value="free">Free draw</option>
+          <option value="rect">Rectangle</option>
+          <option value="circle">Circle</option>
+        </select>
+        <button
+          id="btn-sticker"
+          type="button"
+          aria-label="Add sticker image"
+          title="Sticker (PNG)"
+        >🖼</button>
+        <button
+          id="btn-gif"
+          type="button"
+          aria-label="Add GIF overlay"
+          title="GIF"
+        >🎞</button>
+        <button
+          id="btn-clear"
+          type="button"
+          aria-label="Clear whiteboard"
+          title="Clear board"
+        >␡</button>
+        <button
+          id="btn-export"
+          type="button"
+          aria-label="Export whiteboard as PNG"
+          title="Export PNG"
+        >💾</button>
+        <button
+          id="btn-tor"
+          type="button"
+          aria-label="Toggle Tor mode flag"
+          title="Tor mode"
+        >🌀</button>
         <span id="user-indicator" aria-live="polite"></span>
         <span id="video-indicator" aria-live="polite">Video: none | Now: - | Queue: 0</span>
         <div id="video-controls" aria-label="Background video controls">
-          <button id="video-play-pause" type="button">Pause</button>
-          <label>Vol: <input type="range" id="video-volume" min="0" max="1" step="0.05" value="0" /></label>
-          <label>Seek: <input type="range" id="video-seek" min="0" max="100" value="0" /></label>
+          <button
+            id="video-play-pause"
+            type="button"
+            aria-label="Play or pause background video"
+            title="Play / Pause"
+          >⏯</button>
+          <label>
+            <span aria-hidden="true">🔊</span>
+            <span class="sr-only">Background video volume</span>
+            <input
+              type="range"
+              id="video-volume"
+              min="0"
+              max="1"
+              step="0.05"
+              value="0"
+            />
+          </label>
+          <label>
+            <span aria-hidden="true">⏩</span>
+            <span class="sr-only">Background video seek</span>
+            <input type="range" id="video-seek" min="0" max="100" value="0" />
+          </label>
         </div>
-       </nav>
+      </nav>
        <aside id="connection-panel" aria-label="Connection status">
          <span id="connection-text">Canvas: initializing | Chat: idle | Tor: OFF | Video: none</span>
        </aside>
