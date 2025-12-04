@@ -77,6 +77,12 @@
         <button id="btn-clear">Clear Board</button>
         <button id="btn-tor">Tor Mode</button>
         <span id="user-indicator" aria-live="polite"></span>
+        <span id="video-indicator" aria-live="polite">Video: none | Now: - | Queue: 0</span>
+        <div id="video-controls" aria-label="Background video controls">
+          <button id="video-play-pause" type="button">Pause</button>
+          <label>Vol: <input type="range" id="video-volume" min="0" max="1" step="0.05" value="0" /></label>
+          <label>Seek: <input type="range" id="video-seek" min="0" max="100" value="0" /></label>
+        </div>
       </nav>
       <aside id="connection-panel" aria-label="Connection status">
         <span id="connection-text">Canvas: initializing | Chat: idle | Tor: OFF | Video: none</span>
