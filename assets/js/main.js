@@ -2,20 +2,13 @@
    main.js – Version 5 (ES module, fixed library loading)
    ------------------------------------------------------------------ */
 
+import * as Y from 'yjs';
+import { WebrtcProvider } from 'y-webrtc';
+import { fabric } from 'fabric';
 import { torFetch, setTorEnabled, torEnabled } from './lib/tor-client.js';
 
-// Wait for globals to load from CDN
-const waitForGlobals = async () => {
-  let attempts = 0;
-  while ((!globalThis.Y || !globalThis.fabric) && attempts < 50) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    attempts++;
-  }
-  if (!globalThis.Y || !globalThis.fabric) {
-    console.error('Failed to load required libraries');
-    return false;
-  }
-  return true;
+const generateStrokeId = () => {
+  return 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
 };
 
 /**
@@ -29,12 +22,9 @@ const getColorForClient = (clientId) => {
 };
 
 const initC64App = async () => {
-  const ready = await waitForGlobals();
-  if (!ready) throw new Error('Required libraries failed to load');
-
   // Initialize Yjs document & WebRTC provider
   const ydoc = new Y.Doc();
-  const webrtcProvider = new Y.WebrtcProvider('anon-c64-room', ydoc, {});
+  const webrtcProvider = new WebrtcProvider('anon-c64-room', ydoc, {});
 
   // Shared data structures
   const yChat   = ydoc.getText('chat');   // chat log (plain text)
@@ -93,7 +83,7 @@ const initC64App = async () => {
 
   // Sync Fabric objects with Yjs – local creations go into Yjs
   canvas.on('path:created', ({ path }) => {
-    const id = Y.utils.generateID();
+    const id = generateStrokeId();
     path.set('id', id);
     path.set('authorId', clientId);
     path.set('authorColor', userColor);
