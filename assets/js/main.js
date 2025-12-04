@@ -2,6 +2,8 @@
    main.js – Version 5 (ES module, fixed library loading)
    ------------------------------------------------------------------ */
 
+import { torFetch, setTorEnabled, torEnabled } from './lib/tor-client.js';
+
 // Wait for globals to load from CDN
 const waitForGlobals = async () => {
   let attempts = 0;
@@ -50,11 +52,47 @@ const initC64App = async () => {
 
   console.log('C64 canvas initialized');
 
-  // Sync Fabric objects with Yjs
+  // Helper to add an object from Yjs to Fabric
+  const addObjectFromY = (key, data) => {
+    if (!data) return;
+    fabric.util.enlivenObjects([data], objs => {
+      objs.forEach(o => (o.id = key));
+      if (objs.length) {
+        canvas.add(...objs);
+        canvas.renderAll();
+      }
+    });
+  };
+
+  // Initial load of existing canvas objects from Yjs
+  yCanvas.forEach((data, key) => {
+    addObjectFromY(key, data);
+  });
+
+  // Sync Fabric objects with Yjs – local creations go into Yjs
   canvas.on('path:created', ({ path }) => {
-    const obj = path.toObject(['stroke', 'strokeWidth']);
-    const id  = Y.utils.generateID();
+    const id = Y.utils.generateID();
+    path.set('id', id);
+    const obj = path.toObject(['stroke', 'strokeWidth', 'id']);
     yCanvas.set(id, obj);
+  });
+
+  // Apply remote updates from Yjs into Fabric
+  yCanvas.observe(event => {
+    if (event.transaction.local) return; // ignore our own local changes
+
+    event.changes.keys.forEach((change, key) => {
+      if (change.action === 'add' || change.action === 'update') {
+        const data = yCanvas.get(key);
+        addObjectFromY(key, data);
+      } else if (change.action === 'delete') {
+        const obj = canvas.getObjects().find(o => o.id === key);
+        if (obj) {
+          canvas.remove(obj);
+          canvas.renderAll();
+        }
+      }
+    });
   });
 
   // Chat UI – timestamps + scrolling
@@ -98,9 +136,21 @@ const initC64App = async () => {
     yCanvas.clear();
   });
 
-  btnTor?.addEventListener('click', () => {
-    window.torEnabled = !window.torEnabled;
-    alert('Tor mode: ' + (window.torEnabled ? 'ON' : 'OFF'));
+  btnTor?.addEventListener('click', async () => {
+    const newFlag = !torEnabled;
+    setTorEnabled(newFlag);
+    console.log('Tor mode toggled, now:', newFlag);
+
+    // Example proxied request to demonstrate Tor-aware fetching.
+    // If a local proxy is not configured, this will fall back to direct fetch.
+    try {
+      const resp = await torFetch('https://example.com', { method: 'HEAD' });
+      console.log('[Tor test] example.com status:', resp.status);
+    } catch (err) {
+      console.error('[Tor test] request failed:', err);
+    }
+
+    alert('Tor mode: ' + (newFlag ? 'ON' : 'OFF'));
   });
 
   brushColor?.addEventListener('change', e => {
@@ -119,11 +169,19 @@ const initC64App = async () => {
     alert('Upload video feature – not yet implemented.');
   });
 
-  btnYoutube?.addEventListener('click', () => {
+  btnYoutube?.addEventListener('click', async () => {
     const url = prompt('Enter YouTube video URL:');
-    if (url) {
-      alert('Loading YouTube video – not yet implemented: ' + url);
+    if (!url) return;
+
+    console.log('[YouTube] Testing reachability via torFetch');
+    try {
+      const resp = await torFetch(url, { method: 'HEAD' });
+      console.log('[YouTube] HEAD status:', resp.status);
+    } catch (err) {
+      console.error('[YouTube] HEAD request failed:', err);
     }
+
+    alert('Loading YouTube video – not yet implemented: ' + url);
   });
 
   btnSticker?.addEventListener('click', () => {
