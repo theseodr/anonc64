@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Navigate } from "react-router-dom";
 import { Canvas as FabricCanvas } from "fabric";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,7 +22,6 @@ interface Message {
 const DEFAULT_BOARD_TITLE = "Global C64 Board";
 
 const Index = () => {
-  const { user, loading, signOut } = useAuth();
   const [board, setBoard] = useState<Board | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -34,14 +31,7 @@ const Index = () => {
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
 
-  // Redirect unauthenticated users to /auth
-  if (!loading && !user) {
-    return <Navigate to="/auth" replace />;
-  }
-
   useEffect(() => {
-    if (!user) return;
-
     const ensureDefaultBoard = async () => {
       try {
         const { data, error } = await supabase
@@ -63,12 +53,14 @@ const Index = () => {
           return;
         }
 
+        // Board should already exist from a backend migration; if not, create a
+        // public global board with no specific owner.
         const { data: created, error: insertError } = await supabase
           .from("boards")
           .insert({
             title: DEFAULT_BOARD_TITLE,
             visibility: "public",
-            owner_id: user.id,
+            owner_id: null,
           })
           .select("id, title, description")
           .single();
@@ -85,7 +77,7 @@ const Index = () => {
     };
 
     ensureDefaultBoard();
-  }, [user]);
+  }, []);
 
   // Fabric canvas setup
   useEffect(() => {
@@ -153,14 +145,14 @@ const Index = () => {
 
   // Persist strokes on draw
   useEffect(() => {
-    if (!board || !fabricCanvas || !user) return;
+    if (!board || !fabricCanvas) return;
 
     const handlePathCreated = async () => {
       try {
         const json = fabricCanvas.toJSON();
         const { error } = await supabase.from("strokes").insert({
           board_id: board.id,
-          user_id: user.id,
+          user_id: null,
           path_data: json,
           color: "#00d7d7",
           width: 2,
@@ -182,7 +174,7 @@ const Index = () => {
     return () => {
       fabricCanvas.off("path:created", listener as any);
     };
-  }, [board, fabricCanvas, user]);
+  }, [board, fabricCanvas]);
 
   // Realtime updates for strokes
   useEffect(() => {
@@ -273,7 +265,7 @@ const Index = () => {
 
     const { error } = await supabase.from("messages").insert({
       board_id: board.id,
-      user_id: user?.id ?? null,
+      user_id: null,
       content,
     });
 
@@ -284,7 +276,7 @@ const Index = () => {
   };
 
   const handleClearBoard = async () => {
-    if (!board || !fabricCanvas || !user) return;
+    if (!board || !fabricCanvas) return;
 
     fabricCanvas.clear();
     fabricCanvas.set("backgroundColor", "#000000");
@@ -293,7 +285,7 @@ const Index = () => {
     const json = fabricCanvas.toJSON();
     const { error } = await supabase.from("strokes").insert({
       board_id: board.id,
-      user_id: user.id,
+      user_id: null,
       path_data: json,
       color: "#00d7d7",
       width: 2,
@@ -305,7 +297,7 @@ const Index = () => {
     }
   };
 
-  if (initialising || loading || !user) {
+  if (initialising) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
         <p className="text-sm text-muted-foreground">Loading collaborative board…</p>
@@ -323,14 +315,11 @@ const Index = () => {
             </div>
             <div>
               <p className="text-sm font-mono uppercase tracking-[0.22em] text-muted-foreground">Global Board</p>
-              <p className="text-xs text-muted-foreground/80">Collaborative C64 whiteboard &amp; chat</p>
+              <p className="text-xs text-muted-foreground/80">Anonymous collaborative C64 whiteboard &amp; chat</p>
             </div>
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="hidden sm:inline">{user.email}</span>
-            <Button size="sm" variant="outline" onClick={signOut}>
-              Sign out
-            </Button>
+            <span className="hidden sm:inline">Anonymous C64 Board</span>
           </div>
         </header>
 
@@ -372,8 +361,6 @@ const Index = () => {
                     <p className="text-muted-foreground">No messages yet. Say hi!</p>
                   ) : (
                     messages.map((msg) => {
-                      const isSelf = msg.user_id && msg.user_id === user.id;
-                      const who = isSelf ? "You" : "Guest";
                       const time = new Date(msg.created_at).toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
@@ -382,7 +369,7 @@ const Index = () => {
                         <div key={msg.id} className="rounded bg-card/80 px-2 py-1">
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-primary">
-                              {who}
+                              Guest
                             </span>
                             <span className="text-[0.65rem] text-muted-foreground">{time}</span>
                           </div>

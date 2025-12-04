@@ -6,14 +6,14 @@
     <title>Anon C64 Chat &amp; Whiteboard</title>
     <meta
       name="description"
-      content="Anonymous C64-style collaborative chat and whiteboard with Fabric.js drawing and Yjs WebRTC sync."
+      content="Anonymous C64-style collaborative chat and whiteboard backed by the Lovable Cloud realtime backend."
     />
     <meta name="author" content="Anon" />
 
     <meta property="og:title" content="Anon C64 Chat &amp; Whiteboard" />
     <meta
       property="og:description"
-      content="Retro C64 chat and shared whiteboard in your browser, powered by Fabric.js and Yjs WebRTC."
+      content="Retro C64 collaborative whiteboard and chat powered by Lovable Cloud."
     />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
@@ -32,209 +32,10 @@
       rel="stylesheet"
     />
 
-    <!-- All libraries (Yjs, y-webrtc, Fabric) are bundled locally via Vite. -->
-    <script type="module" src="assets/js/main.js"></script>
-
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
   </head>
   <body>
-    <div id="app">
-      <h1 style="position:absolute;clip:rect(0,0,0,0);height:1px;width:1px;overflow:hidden;">
-        Anon C64 Chat &amp; Whiteboard
-      </h1>
-      <video id="bg-video" autoplay loop muted playsinline></video>
-      <canvas id="whiteboard"></canvas>
-      <div
-        id="chat-resizer"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize chat panel"
-      ></div>
-      <section id="chat" aria-labelledby="chat-title">
-        <header id="chat-title">
-          🗨️ Anonymous Chat
-        </header>
-        <div
-          id="messages"
-          role="log"
-          aria-live="polite"
-          aria-relevant="additions text"
-          aria-label="Chat messages"
-          tabindex="0"
-        ></div>
-        <label for="msg-input" class="sr-only">Type a message and press Enter to send</label>
-        <input
-          id="msg-input"
-          placeholder="Type a message…"
-          autocomplete="off"
-          aria-label="Chat message input"
-        />
-      </section>
-      <nav id="toolbar">
-        <button
-          id="btn-upload"
-          type="button"
-          aria-label="Upload video file"
-          title="Upload video file"
-        >📼</button>
-        <button
-          id="btn-youtube"
-          type="button"
-          aria-label="Use YouTube background video"
-          title="YouTube background"
-        >▶</button>
-        <label>
-          <span aria-hidden="true">✏️</span>
-          <span class="sr-only">Brush color</span>
-          <input type="color" id="brush-color" value="#00d7d7" />
-        </label>
-        <label>
-          <span aria-hidden="true">⤧</span>
-          <span class="sr-only">Brush size</span>
-          <input type="range" id="brush-size" min="1" max="10" value="2" />
-        </label>
-        <select id="shape-select" aria-label="Drawing mode">
-          <option value="free">Free draw</option>
-          <option value="rect">Rectangle</option>
-          <option value="circle">Circle</option>
-        </select>
-        <button
-          id="btn-sticker"
-          type="button"
-          aria-label="Add sticker image"
-          title="Sticker (PNG)"
-        >🖼</button>
-        <button
-          id="btn-gif"
-          type="button"
-          aria-label="Add GIF overlay"
-          title="GIF"
-        >🎞</button>
-        <button
-          id="btn-clear"
-          type="button"
-          aria-label="Clear whiteboard"
-          title="Clear board"
-        >␡</button>
-        <button
-          id="btn-export"
-          type="button"
-          aria-label="Export whiteboard as PNG"
-          title="Export PNG"
-        >💾</button>
-        <button
-          id="btn-tor"
-          type="button"
-          aria-label="Toggle Tor mode flag"
-          title="Tor mode"
-        >🌀</button>
-        <button
-          id="btn-chat-toggle"
-          type="button"
-          aria-pressed="false"
-          aria-label="Hide chat sidebar (Alt+H)"
-          title="Hide chat (Alt+H)"
-        >⬌</button>
-        <span id="user-indicator" aria-live="polite"></span>
-        <span id="video-indicator" aria-live="polite">
-          <span class="video-led video-led--off" aria-hidden="true"></span>
-          <span class="video-indicator-text">Off | Q:0</span>
-        </span>
-        <div id="video-controls" aria-label="Background video controls">
-          <button
-            id="video-play-pause"
-            type="button"
-            aria-label="Play or pause background video"
-            title="Play / Pause"
-          >⏯</button>
-          <label>
-            <span aria-hidden="true">🔊</span>
-            <span class="sr-only">Background video volume</span>
-            <input
-              type="range"
-              id="video-volume"
-              min="0"
-              max="1"
-              step="0.05"
-              value="0"
-            />
-          </label>
-          <label>
-            <span aria-hidden="true">⏩</span>
-            <span class="sr-only">Background video seek</span>
-            <input type="range" id="video-seek" min="0" max="100" value="0" />
-          </label>
-        </div>
-      </nav>
-       <aside id="connection-panel" aria-label="Connection status">
-         <span id="connection-text">Canvas: initializing | Chat: idle | Tor: OFF | Video: none</span>
-       </aside>
-       <aside id="backend-panel" aria-label="Backend status">
-         <span id="backend-text">Host: - | Mode: local-only | Backend: disabled | Last API success: never</span>
-       </aside>
-
-      <button
-        id="help-toggle"
-        type="button"
-        aria-haspopup="dialog"
-        aria-controls="help-overlay"
-        aria-label="Open help overlay"
-      >
-        HELP
-      </button>
-
-      <section
-        id="help-overlay"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="help-title"
-        hidden
-      >
-        <div class="help-content">
-          <header>
-            <h2 id="help-title">C64 Whiteboard Guide</h2>
-            <p>Draw, chat, and set the mood with video backdrops — all in your browser.</p>
-          </header>
-          <div class="help-grid" aria-label="Controls overview">
-            <article>
-              <h3>Canvas &amp; drawing</h3>
-              <ul>
-                <li>Move your mouse over the board to draw with the active brush.</li>
-                <li>Use the color picker and size slider in the toolbar to adjust the brush.</li>
-                <li>Use "Clear Board" to wipe all strokes.</li>
-              </ul>
-            </article>
-            <article>
-              <h3>Chat</h3>
-              <ul>
-                <li>Type in the chat box on the right and press Enter to send.</li>
-                <li>Newest messages appear at the bottom of the log.</li>
-              </ul>
-            </article>
-            <article>
-              <h3>Video background</h3>
-              <ul>
-                <li>"Upload Video" loads a local file as the animated background.</li>
-                <li>"YouTube Link" embeds a looping, muted YouTube video behind the board.</li>
-              </ul>
-            </article>
-            <article>
-              <h3>Tor mode</h3>
-              <ul>
-                <li>Tor mode is a local toggle only — it does not contact the Tor network.</li>
-                <li>The status panel shows whether the Tor flag is ON or OFF.</li>
-              </ul>
-            </article>
-          </div>
-          <footer>
-            <label class="help-dont-show">
-              <input type="checkbox" id="help-dont-show" />
-              Don&apos;t show this again on this device
-            </label>
-            <button type="button" id="help-close">Got it</button>
-          </footer>
-        </div>
-      </section>
-    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
