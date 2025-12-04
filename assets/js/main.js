@@ -52,15 +52,31 @@ const initC64App = async () => {
 
   // Shared data structures
   const yChat   = ydoc.getText('chat');   // chat log (plain text)
-  const yCanvas = ydoc.getMap('canvas'); // whiteboard objects
+  const yCanvas = ydoc.getMap('canvas');  // whiteboard objects
 
   const connPanel = document.getElementById('connection-panel');
   const connText  = document.getElementById('connection-text');
 
+  // Lightweight status model for the in-app panel
+  let canvasReady = false;
+  let chatMessagesCount = 0;
+  let videoState = 'none'; // 'none' | 'local' | 'youtube'
+
   const renderConnectionStatus = () => {
     if (!connText) return;
     const torStatus = torEnabled ? 'ON' : 'OFF';
-    connText.textContent = `RTC: disabled, Yjs: local-only, Tor: ${torStatus}`;
+    const canvasStatus = canvasReady ? 'ready' : 'initializing';
+    const chatStatus =
+      chatMessagesCount > 0
+        ? `${chatMessagesCount} msg${chatMessagesCount > 1 ? 's' : ''}`
+        : 'idle';
+    const videoStatus =
+      videoState === 'local' ? 'local video' :
+      videoState === 'youtube' ? 'YouTube' :
+      'none';
+
+    connText.textContent =
+      `Canvas: ${canvasStatus} | Chat: ${chatStatus} | Tor: ${torStatus} | Video: ${videoStatus}`;
   };
   renderConnectionStatus();
 
@@ -89,6 +105,21 @@ const initC64App = async () => {
     selection: false
   });
 
+  // Match the canvas backing size to the viewport so drawing covers the full board.
+  const resizeCanvas = () => {
+    const rect = whiteboardEl.getBoundingClientRect();
+    canvas.setWidth(rect.width);
+    canvas.setHeight(rect.height);
+    if (whiteboardEl instanceof HTMLCanvasElement) {
+      whiteboardEl.width = rect.width;
+      whiteboardEl.height = rect.height;
+    }
+    canvas.renderAll();
+  };
+
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
   // Ensure a drawing brush exists for Fabric v6
   if (!canvas.freeDrawingBrush) {
     canvas.isDrawingMode = true;
@@ -99,6 +130,8 @@ const initC64App = async () => {
 
   canvas.freeDrawingBrush.width = 2;
   canvas.freeDrawingBrush.color = userColor;
+  canvasReady = true;
+  renderConnectionStatus();
 
   console.log('C64 canvas initialized');
 
@@ -156,12 +189,15 @@ const initC64App = async () => {
 
   // Chat UI – timestamps + scrolling
   function renderChat() {
-    const lines = yChat.toString().split('\n');
+    const raw = yChat.toString();
+    const lines = raw.split('\n').filter(Boolean);
+    chatMessagesCount = lines.length;
     msgBox.innerHTML = lines.map(line => {
       const [ts, msg] = line.split('|', 2);
       return `<div class="message"><span class="timestamp">${ts}</span>${msg}</div>`;
     }).join('');
     msgBox.scrollTop = msgBox.scrollHeight;
+    renderConnectionStatus();
   }
 
   yChat.observe(() => renderChat());
@@ -217,7 +253,6 @@ const initC64App = async () => {
     setTorEnabled(newFlag);
     console.log('Tor mode toggled, now:', newFlag);
     renderConnectionStatus();
-    alert('Tor mode: ' + (newFlag ? 'ON' : 'OFF'));
   });
 
   brushColor?.addEventListener('change', e => {
@@ -257,6 +292,8 @@ const initC64App = async () => {
       console.log('[Video] Loaded local file as background video.');
       bgVideo.src = currentVideoObjectUrl;
       bgVideo.play().catch(err => console.error('[Video] play() failed', err));
+      videoState = 'local';
+      renderConnectionStatus();
     });
 
     fileInput.click();
@@ -296,6 +333,9 @@ const initC64App = async () => {
     if (bgVideo) {
       bgVideo.pause();
     }
+
+    videoState = 'youtube';
+    renderConnectionStatus();
   });
 
   btnSticker?.addEventListener('click', () => {
@@ -305,6 +345,50 @@ const initC64App = async () => {
   btnGif?.addEventListener('click', () => {
     alert('GIF upload – not yet implemented.');
   });
+
+  // Compact help overlay for first-time visitors
+  const helpToggle = document.getElementById('help-toggle');
+  const helpOverlay = document.getElementById('help-overlay');
+  const helpClose = document.getElementById('help-close');
+  const helpDontShow = document.getElementById('help-dont-show');
+  const HELP_SEEN_KEY = 'c64_help_seen_v1';
+
+  const setHelpVisibility = (visible) => {
+    if (!helpOverlay) return;
+    helpOverlay.hidden = !visible;
+  };
+
+  helpToggle?.addEventListener('click', () => {
+    if (!helpOverlay) return;
+    setHelpVisibility(helpOverlay.hidden);
+  });
+
+  helpClose?.addEventListener('click', () => {
+    setHelpVisibility(false);
+    if (helpDontShow && helpDontShow instanceof HTMLInputElement && helpDontShow.checked) {
+      try {
+        window.localStorage.setItem(HELP_SEEN_KEY, '1');
+      } catch {
+        // ignore storage errors
+      }
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && helpOverlay && !helpOverlay.hidden) {
+      setHelpVisibility(false);
+    }
+  });
+
+  try {
+    const seen = window.localStorage.getItem(HELP_SEEN_KEY);
+    if (!seen) {
+      setHelpVisibility(true);
+    }
+  } catch {
+    // If storage is unavailable, still show the overlay once.
+    setHelpVisibility(true);
+  }
 
   console.log('C64 chat & toolbar initialized');
 };
