@@ -16,7 +16,7 @@ const waitForGlobals = async () => {
   return true;
 };
 
-(async () => {
+const initC64App = async () => {
   const ready = await waitForGlobals();
   if (!ready) throw new Error('Required libraries failed to load');
 
@@ -28,13 +28,27 @@ const waitForGlobals = async () => {
   const yChat   = ydoc.getText('chat');   // chat log (plain text)
   const yCanvas = ydoc.getMap('canvas'); // whiteboard objects
 
+  // Grab DOM elements
+  const whiteboardEl = document.getElementById('whiteboard');
+  const msgBox = document.getElementById('messages');
+  const input  = document.getElementById('msg-input');
+
+  if (!whiteboardEl || !msgBox || !input) {
+    console.error('C64 init error: missing core DOM elements', {
+      whiteboardEl, msgBox, input
+    });
+    return;
+  }
+
   // Fabric canvas – initialize
-  const canvas = new fabric.Canvas('whiteboard', {
+  const canvas = new fabric.Canvas(whiteboardEl, {
     isDrawingMode: true,
     selection: false
   });
   canvas.freeDrawingBrush.width = 2;
   canvas.freeDrawingBrush.color = '#00d7d7';
+
+  console.log('C64 canvas initialized');
 
   // Sync Fabric objects with Yjs
   canvas.on('path:created', ({ path }) => {
@@ -44,9 +58,6 @@ const waitForGlobals = async () => {
   });
 
   // Chat UI – timestamps + scrolling
-  const msgBox = document.getElementById('messages');
-  const input  = document.getElementById('msg-input');
-
   function renderChat() {
     const lines = yChat.toString().split('\n');
     msgBox.innerHTML = lines.map(line => {
@@ -67,44 +78,69 @@ const waitForGlobals = async () => {
   });
 
   // Toolbar button handlers
-  document.getElementById('btn-clear').addEventListener('click', () => {
+  const btnClear   = document.getElementById('btn-clear');
+  const btnTor     = document.getElementById('btn-tor');
+  const brushColor = document.getElementById('brush-color');
+  const brushSize  = document.getElementById('brush-size');
+  const shapeSel   = document.getElementById('shape-select');
+  const btnUpload  = document.getElementById('btn-upload');
+  const btnYoutube = document.getElementById('btn-youtube');
+  const btnSticker = document.getElementById('btn-sticker');
+  const btnGif     = document.getElementById('btn-gif');
+
+  if (!btnClear || !btnTor || !brushColor || !brushSize || !shapeSel ||
+      !btnUpload || !btnYoutube || !btnSticker || !btnGif) {
+    console.warn('C64 init warning: some toolbar elements missing');
+  }
+
+  btnClear?.addEventListener('click', () => {
     canvas.clear();
     yCanvas.clear();
   });
 
-  document.getElementById('btn-tor').addEventListener('click', () => {
+  btnTor?.addEventListener('click', () => {
     window.torEnabled = !window.torEnabled;
     alert('Tor mode: ' + (window.torEnabled ? 'ON' : 'OFF'));
   });
 
-  document.getElementById('brush-color').addEventListener('change', e => {
+  brushColor?.addEventListener('change', e => {
     canvas.freeDrawingBrush.color = e.target.value;
   });
 
-  document.getElementById('brush-size').addEventListener('input', e => {
+  brushSize?.addEventListener('input', e => {
     canvas.freeDrawingBrush.width = parseInt(e.target.value, 10);
   });
 
-  document.getElementById('shape-select').addEventListener('change', e => {
+  shapeSel?.addEventListener('change', e => {
     console.log('Shape selected:', e.target.value);
   });
 
-  document.getElementById('btn-upload').addEventListener('click', () => {
+  btnUpload?.addEventListener('click', () => {
     alert('Upload video feature – not yet implemented.');
   });
 
-  document.getElementById('btn-youtube').addEventListener('click', () => {
+  btnYoutube?.addEventListener('click', () => {
     const url = prompt('Enter YouTube video URL:');
     if (url) {
       alert('Loading YouTube video – not yet implemented: ' + url);
     }
   });
 
-  document.getElementById('btn-sticker').addEventListener('click', () => {
+  btnSticker?.addEventListener('click', () => {
     alert('Sticker upload – not yet implemented.');
   });
 
-  document.getElementById('btn-gif').addEventListener('click', () => {
+  btnGif?.addEventListener('click', () => {
     alert('GIF upload – not yet implemented.');
   });
-})();
+
+  console.log('C64 chat & toolbar initialized');
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    initC64App().catch(err => console.error('C64 init failed', err));
+  }, { once: true });
+} else {
+  initC64App().catch(err => console.error('C64 init failed', err));
+}
