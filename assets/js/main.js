@@ -46,6 +46,33 @@ const getColorForClient = (clientId) => {
   return hslToHex(hue, 80, 60);
 };
 
+// When hosted on anon.p2p.pm we talk to the PHP backend at /api.
+// In the Lovable preview we stay fully local and do not make any HTTP calls.
+const C64_HOSTNAME = 'anon.p2p.pm';
+const API_BASE = window.location.hostname === C64_HOSTNAME ? '/api' : null;
+
+const apiFetch = async (path, options = {}) => {
+  if (!API_BASE) return null;
+  try {
+    const res = await fetch(API_BASE + path, {
+      credentials: 'same-origin',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+    });
+    if (!res.ok) {
+      console.warn('[API] Non-OK response for', path, res.status);
+      return null;
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn('[API] Request failed for', path, err);
+    return null;
+  }
+};
+
 const initC64App = async () => {
   // Initialize Yjs document (local-only, no WebRTC in this build)
   const ydoc = new Y.Doc();
@@ -62,6 +89,11 @@ const initC64App = async () => {
   let chatMessagesCount = 0;
   let videoState = 'none'; // 'none' | 'local' | 'youtube'
   let currentTool = 'free';
+
+  const hasBackend = !!API_BASE;
+  let chatMessages = [];
+  let lastChatTimestamp = 0;
+
 
   const renderConnectionStatus = () => {
     if (!connText) return;
@@ -286,26 +318,119 @@ const initC64App = async () => {
   });
 
   // Chat UI – timestamps + scrolling
-  function renderChat() {
+  const escapeHtml = (str) =>
+    String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  const labelForIp = (ip) => {
+    if (!ip) return 'anon';
+    let hash = 0;
+    for (let i = 0; i < ip.length; i++) {
+      hash = ((hash << 5) - hash + ip.charCodeAt(i)) | 0;
+    }
+    const n = Math.abs(hash % 1000);
+    return `peer-${n.toString().padStart(3, '0')}`;
+  };
+
+  const renderChatLocal = () => {
     const raw = yChat.toString();
     const lines = raw.split('\n').filter(Boolean);
     chatMessagesCount = lines.length;
-    msgBox.innerHTML = lines.map(line => {
-      const [ts, msg] = line.split('|', 2);
-      return `<div class="message"><span class="timestamp">${ts}</span>${msg}</div>`;
-    }).join('');
+    msgBox.innerHTML = lines
+      .map((line) => {
+        const [ts, msg] = line.split('|', 2);
+        return `<div class="message"><span class="timestamp">${escapeHtml(ts)}</span>${escapeHtml(msg)}</div>`;
+      })
+      .join('');
     msgBox.scrollTop = msgBox.scrollHeight;
     renderConnectionStatus();
+  };
+
+  const renderChatBackend = () => {
+    chatMessagesCount = chatMessages.length;
+    msgBox.innerHTML = chatMessages
+      .map((m) => {
+        const ts = new Date(m.created_at || Date.now()).toLocaleTimeString();
+        const nick = labelForIp(m.ip);
+        const tooltip = `IP: ${m.ip || 'unknown'}\nRDNS: ${m.rdns || 'reverse DNS not available'}`;
+        return `<div class="message"><span class="timestamp">${escapeHtml(ts)}</span><span class="nick" title="${escapeHtml(tooltip)}">${escapeHtml(nick)}</span>: ${escapeHtml(m.text || '')}</div>`;
+      })
+      .join('');
+    msgBox.scrollTop = msgBox.scrollHeight;
+    renderConnectionStatus();
+  };
+
+  const pollMessages = async () => {
+    if (!hasBackend) return;
+    const data = await apiFetch('/list_messages.php?since=' + lastChatTimestamp);
+    if (!data || !Array.isArray(data.messages)) return;
+    let changed = false;
+    for (const m of data.messages) {
+      chatMessages.push(m);
+      if (m.created_at && m.created_at > lastChatTimestamp) {
+        lastChatTimestamp = m.created_at;
+      }
+      changed = true;
+    }
+    if (changed) {
+      renderChatBackend();
+    }
+  };
+
+  if (hasBackend) {
+    // Initial load + polling for new chat messages
+    pollMessages();
+    setInterval(pollMessages, 2000);
+  } else {
+    // Local-only chat via Yjs when no backend is available (Lovable preview, etc.)
+    yChat.observe(() => renderChatLocal());
+    renderChatLocal();
   }
 
-  yChat.observe(() => renderChat());
+  input.addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter') return;
+    const trimmed = input.value.trim();
+    if (!trimmed) return;
 
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && input.value.trim()) {
-      const msg = input.value.trim();
-      console.log('[Chat] sending message', msg);
+    if (hasBackend) {
+      console.log('[Chat] sending message via backend', trimmed);
+      const payload = { text: trimmed };
+      const result = await apiFetch('/send_message.php', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      input.value = '';
+      if (result && result.ok) {
+        chatMessages.push({
+          id: result.id,
+          text: result.text,
+          created_at: result.created_at,
+          ip: result.ip,
+          rdns: result.rdns,
+        });
+        if (result.created_at && result.created_at > lastChatTimestamp) {
+          lastChatTimestamp = result.created_at;
+        }
+        renderChatBackend();
+      } else {
+        // Fallback: optimistic local echo
+        chatMessages.push({
+          id: Date.now(),
+          text: trimmed,
+          created_at: Date.now(),
+          ip: '',
+          rdns: '',
+        });
+        renderChatBackend();
+      }
+    } else {
+      console.log('[Chat] sending message (local only)', trimmed);
       const ts = new Date().toLocaleTimeString();
-      yChat.insert(yChat.length, `${ts}|${msg}\n`);
+      yChat.insert(yChat.length, `${ts}|${trimmed}\n`);
       input.value = '';
     }
   });
