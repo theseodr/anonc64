@@ -19,7 +19,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
-          owner_id: string
+          owner_id: string | null
           title: string
           updated_at: string
           visibility: Database["public"]["Enums"]["board_visibility"]
@@ -28,7 +28,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
-          owner_id: string
+          owner_id?: string | null
           title: string
           updated_at?: string
           visibility?: Database["public"]["Enums"]["board_visibility"]
@@ -37,7 +37,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
-          owner_id?: string
+          owner_id?: string | null
           title?: string
           updated_at?: string
           visibility?: Database["public"]["Enums"]["board_visibility"]
