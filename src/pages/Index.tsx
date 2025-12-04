@@ -135,7 +135,7 @@ const Index = () => {
 
       if (data?.path_data) {
         try {
-          fabricCanvas.loadFromJSON(data.path_data, () => {
+          fabricCanvas.loadFromJSON(data.path_data as any, () => {
             fabricCanvas.renderAll();
           });
         } catch (err) {
@@ -143,7 +143,8 @@ const Index = () => {
         }
       } else {
         fabricCanvas.clear();
-        fabricCanvas.setBackgroundColor("#000000", () => fabricCanvas.renderAll());
+        fabricCanvas.set("backgroundColor", "#000000");
+        fabricCanvas.renderAll();
       }
     };
 
@@ -286,7 +287,8 @@ const Index = () => {
     if (!board || !fabricCanvas || !user) return;
 
     fabricCanvas.clear();
-    fabricCanvas.setBackgroundColor("#000000", () => fabricCanvas.renderAll());
+    fabricCanvas.set("backgroundColor", "#000000");
+    fabricCanvas.renderAll();
 
     const json = fabricCanvas.toJSON();
     const { error } = await supabase.from("strokes").insert({
@@ -336,9 +338,7 @@ const Index = () => {
           <div className="flex-1">
             <Card className="h-full border-border/70 bg-card/90 shadow-soft">
               <CardHeader className="pb-3">
-                <CardTitle asChild>
-                  <h1 className="text-xl font-semibold tracking-tight">C64 Whiteboard</h1>
-                </CardTitle>
+                <CardTitle className="text-xl font-semibold tracking-tight">C64 Whiteboard</CardTitle>
                 <CardDescription>
                   Draw in real time with others. The canvas state is synced through the Lovable backend.
                 </CardDescription>
