@@ -30,6 +30,32 @@ const initC64App = async () => {
   const yChat   = ydoc.getText('chat');   // chat log (plain text)
   const yCanvas = ydoc.getMap('canvas'); // whiteboard objects
 
+  // Connection status tracking
+  let webrtcStatus = 'connecting';
+  let yjsSynced = false;
+
+  const connPanel = document.getElementById('connection-panel');
+  const connText  = document.getElementById('connection-text');
+
+  const renderConnectionStatus = () => {
+    if (!connText) return;
+    const torStatus = torEnabled ? 'ON' : 'OFF';
+    const syncLabel = yjsSynced ? 'synced' : 'syncing…';
+    connText.textContent = `RTC: ${webrtcStatus}, Yjs: ${syncLabel}, Tor: ${torStatus}`;
+  };
+
+  webrtcProvider.on('status', (event) => {
+    if (event && event.status) {
+      webrtcStatus = event.status;
+      renderConnectionStatus();
+    }
+  });
+
+  webrtcProvider.on('synced', (synced) => {
+    yjsSynced = !!synced;
+    renderConnectionStatus();
+  });
+
   // Per-user drawing identity
   const clientId = ydoc.clientID;
   const userColor = getColorForClient(clientId);
@@ -180,6 +206,7 @@ const initC64App = async () => {
       console.error('[Tor test] request failed:', err);
     }
 
+    renderConnectionStatus();
     alert('Tor mode: ' + (newFlag ? 'ON' : 'OFF'));
   });
 
