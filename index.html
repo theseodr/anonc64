@@ -3,17 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Retro C64 Static Site | React + Vite Landing</title>
+    <title>Anon C64 Chat &amp; Whiteboard</title>
     <meta
       name="description"
-      content="C64-inspired static landing page rebuilt with React, Vite, and Tailwind CSS for any static web server."
+      content="Anonymous C64-style collaborative chat and whiteboard with Fabric.js drawing and Yjs WebRTC sync."
     />
-    <meta name="author" content="Lovable" />
+    <meta name="author" content="Anon" />
 
-    <meta property="og:title" content="Retro C64 Static Site | React + Vite Landing" />
+    <meta property="og:title" content="Anon C64 Chat &amp; Whiteboard" />
     <meta
       property="og:description"
-      content="Retro-styled C64 landing page built as a fast static React app, ready for Nginx, Apache, Netlify, and more."
+      content="Retro C64 chat and shared whiteboard in your browser, powered by Fabric.js and Yjs WebRTC."
     />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
@@ -25,10 +25,53 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@Lovable" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
-  </head>
 
+    <link rel="stylesheet" href="assets/css/c64-theme.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;display=swap"
+      rel="stylesheet"
+    />
+
+    <script src="https://cdn.jsdelivr.net/npm/yjs/dist/yjs.min.js"></script>
+    <noscript><script src="assets/js/lib/yjs.min.js"></script></noscript>
+
+    <script src="https://cdn.jsdelivr.net/npm/y-webrtc/dist/y-webrtc.min.js"></script>
+    <noscript><script src="assets/js/lib/y-webrtc.min.js"></script></noscript>
+
+    <script src="https://cdn.jsdelivr.net/npm/fabric/dist/fabric.min.js"></script>
+    <noscript><script src="assets/js/lib/fabric.min.js"></script></noscript>
+
+    <script type="module" src="assets/js/main.js"></script>
+
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+  </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div id="app">
+      <h1 style="position:absolute;clip:rect(0,0,0,0);height:1px;width:1px;overflow:hidden;">
+        Anon C64 Chat &amp; Whiteboard
+      </h1>
+      <video id="bg-video" autoplay loop muted playsinline></video>
+      <canvas id="whiteboard"></canvas>
+      <section id="chat">
+        <header>🗨️ Anonymous Chat</header>
+        <div id="messages"></div>
+        <input id="msg-input" placeholder="Type a message…" autocomplete="off" />
+      </section>
+      <nav id="toolbar">
+        <button id="btn-upload">Upload Video</button>
+        <button id="btn-youtube">YouTube Link</button>
+        <label>✏️ Brush: <input type="color" id="brush-color" value="#00d7d7" /></label>
+        <label>Size: <input type="range" id="brush-size" min="1" max="10" value="2" /></label>
+        <select id="shape-select">
+          <option value="free">Free draw</option>
+          <option value="rect">Rectangle</option>
+          <option value="circle">Circle</option>
+        </select>
+        <button id="btn-sticker">Sticker (PNG)</button>
+        <button id="btn-gif">GIF</button>
+        <button id="btn-clear">Clear Board</button>
+        <button id="btn-tor">Tor Mode</button>
+      </nav>
+    </div>
   </body>
 </html>
