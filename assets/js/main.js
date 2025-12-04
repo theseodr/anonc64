@@ -212,20 +212,10 @@ const initC64App = async () => {
     yCanvas.clear();
   });
 
-  btnTor?.addEventListener('click', async () => {
+  btnTor?.addEventListener('click', () => {
     const newFlag = !torEnabled;
     setTorEnabled(newFlag);
     console.log('Tor mode toggled, now:', newFlag);
-
-    // Example proxied request to demonstrate Tor-aware fetching.
-    // If a local proxy is not configured, this will fall back to direct fetch.
-    try {
-      const resp = await torFetch('https://example.com', { method: 'HEAD' });
-      console.log('[Tor test] example.com status:', resp.status);
-    } catch (err) {
-      console.error('[Tor test] request failed:', err);
-    }
-
     renderConnectionStatus();
     alert('Tor mode: ' + (newFlag ? 'ON' : 'OFF'));
   });
@@ -282,7 +272,7 @@ const initC64App = async () => {
     return null;
   };
 
-  btnYoutube?.addEventListener('click', async () => {
+  btnYoutube?.addEventListener('click', () => {
     const url = prompt('Enter YouTube video URL:');
     if (!url) return;
 
@@ -290,14 +280,6 @@ const initC64App = async () => {
     if (!videoId) {
       alert('Could not extract a YouTube video ID from that URL.');
       return;
-    }
-
-    console.log('[YouTube] Testing reachability via torFetch');
-    try {
-      const resp = await torFetch(url, { method: 'HEAD' });
-      console.log('[YouTube] HEAD status:', resp.status);
-    } catch (err) {
-      console.error('[YouTube] HEAD request failed:', err);
     }
 
     let iframe = document.getElementById('yt-embed');
