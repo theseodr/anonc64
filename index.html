@@ -32,12 +32,7 @@
       rel="stylesheet"
     />
 
-    
-
-    
-
-    
-
+    <!-- All libraries (Yjs, y-webrtc, Fabric) are bundled locally via Vite. -->
     <script type="module" src="assets/js/main.js"></script>
 
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
@@ -83,6 +78,9 @@
         <button id="btn-tor">Tor Mode</button>
         <span id="user-indicator" aria-live="polite"></span>
       </nav>
+      <aside id="connection-panel" aria-label="Connection status">
+        <span id="connection-text">RTC: connecting, Yjs: syncing…, Tor: OFF</span>
+      </aside>
     </div>
   </body>
 </html>

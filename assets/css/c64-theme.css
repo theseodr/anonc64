@@ -113,6 +113,18 @@ body {
   color:var(--c64-fg);
 }
 
+#connection-panel {
+  position:absolute;
+  left:8px;
+  bottom:42px;
+  background:#111;
+  border:1px solid var(--c64-accent);
+  padding:3px 6px;
+  font-size:10px;
+  color:var(--c64-fg);
+  z-index:10;
+}
+
 #yt-embed {
   position:absolute;
   top:0;
