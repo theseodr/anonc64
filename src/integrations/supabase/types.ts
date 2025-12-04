@@ -200,6 +200,59 @@ export type Database = {
           },
         ]
       }
+      video_tiles: {
+        Row: {
+          board_id: string
+          created_at: string
+          file_path: string | null
+          height: number
+          id: string
+          source_type: Database["public"]["Enums"]["video_source_type"]
+          start_at_seconds: number | null
+          user_id: string | null
+          width: number
+          x: number
+          y: number
+          youtube_video_id: string | null
+        }
+        Insert: {
+          board_id: string
+          created_at?: string
+          file_path?: string | null
+          height?: number
+          id?: string
+          source_type: Database["public"]["Enums"]["video_source_type"]
+          start_at_seconds?: number | null
+          user_id?: string | null
+          width?: number
+          x?: number
+          y?: number
+          youtube_video_id?: string | null
+        }
+        Update: {
+          board_id?: string
+          created_at?: string
+          file_path?: string | null
+          height?: number
+          id?: string
+          source_type?: Database["public"]["Enums"]["video_source_type"]
+          start_at_seconds?: number | null
+          user_id?: string | null
+          width?: number
+          x?: number
+          y?: number
+          youtube_video_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_tiles_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "boards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
