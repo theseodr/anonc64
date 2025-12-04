@@ -18,6 +18,16 @@ const waitForGlobals = async () => {
   return true;
 };
 
+/**
+ * Derive a stable HSL color for a given Yjs client ID so that
+ * each user has a distinct stroke color across sessions.
+ */
+const getColorForClient = (clientId) => {
+  const base = typeof clientId === 'number' ? clientId : Number(clientId) || 0;
+  const hue = (base * 47) % 360;
+  return `hsl(${hue}, 80%, 60%)`;
+};
+
 const initC64App = async () => {
   const ready = await waitForGlobals();
   if (!ready) throw new Error('Required libraries failed to load');
@@ -30,10 +40,17 @@ const initC64App = async () => {
   const yChat   = ydoc.getText('chat');   // chat log (plain text)
   const yCanvas = ydoc.getMap('canvas'); // whiteboard objects
 
+  // Per-user drawing identity
+  const clientId = ydoc.clientID;
+  const userColor = getColorForClient(clientId);
+  const userLabel = `Artist #${clientId % 1000}`;
+
   // Grab DOM elements
   const whiteboardEl = document.getElementById('whiteboard');
   const msgBox = document.getElementById('messages');
   const input  = document.getElementById('msg-input');
+  const bgVideo = document.getElementById('bg-video');
+  const userIndicator = document.getElementById('user-indicator');
 
   if (!whiteboardEl || !msgBox || !input) {
     console.error('C64 init error: missing core DOM elements', {
@@ -48,7 +65,7 @@ const initC64App = async () => {
     selection: false
   });
   canvas.freeDrawingBrush.width = 2;
-  canvas.freeDrawingBrush.color = '#00d7d7';
+  canvas.freeDrawingBrush.color = userColor;
 
   console.log('C64 canvas initialized');
 
@@ -56,7 +73,12 @@ const initC64App = async () => {
   const addObjectFromY = (key, data) => {
     if (!data) return;
     fabric.util.enlivenObjects([data], objs => {
-      objs.forEach(o => (o.id = key));
+      objs.forEach(o => {
+        o.id = key;
+        if (data.authorColor) {
+          o.set('stroke', data.authorColor);
+        }
+      });
       if (objs.length) {
         canvas.add(...objs);
         canvas.renderAll();
@@ -73,7 +95,10 @@ const initC64App = async () => {
   canvas.on('path:created', ({ path }) => {
     const id = Y.utils.generateID();
     path.set('id', id);
-    const obj = path.toObject(['stroke', 'strokeWidth', 'id']);
+    path.set('authorId', clientId);
+    path.set('authorColor', userColor);
+
+    const obj = path.toObject(['stroke', 'strokeWidth', 'id', 'authorId', 'authorColor']);
     yCanvas.set(id, obj);
   });
 
@@ -131,6 +156,21 @@ const initC64App = async () => {
     console.warn('C64 init warning: some toolbar elements missing');
   }
 
+  // Reflect per-user color in the toolbar UI
+  if (brushColor) {
+    brushColor.value = userColor;
+  }
+  if (userIndicator) {
+    userIndicator.innerHTML = `You: <span style="
+      display:inline-block;
+      width:12px;
+      height:12px;
+      margin-left:4px;
+      border:1px solid #ffffff;
+      background:${userColor};
+    " aria-hidden="true"></span> <span class="sr-only">${userLabel}</span>`;
+  }
+
   btnClear?.addEventListener('click', () => {
     canvas.clear();
     yCanvas.clear();
@@ -165,13 +205,55 @@ const initC64App = async () => {
     console.log('Shape selected:', e.target.value);
   });
 
+  let currentVideoObjectUrl = null;
+
   btnUpload?.addEventListener('click', () => {
-    alert('Upload video feature – not yet implemented.');
+    if (!bgVideo) {
+      alert('Background video element is missing.');
+      return;
+    }
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'video/*';
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+
+      if (currentVideoObjectUrl) {
+        URL.revokeObjectURL(currentVideoObjectUrl);
+        currentVideoObjectUrl = null;
+      }
+
+      currentVideoObjectUrl = URL.createObjectURL(file);
+      console.log('[Video] Loaded local file as background video.');
+      bgVideo.src = currentVideoObjectUrl;
+      bgVideo.play().catch(err => console.error('[Video] play() failed', err));
+    });
+
+    fileInput.click();
   });
+
+  const extractYouTubeId = (url) => {
+    let match = url.match(/^https?:\/\/youtu\.be\/([^?&#]+)/);
+    if (match) return match[1];
+    match = url.match(/[?&]v=([^&#]+)/);
+    if (match) return match[1];
+    match = url.match(/embed\/([^?&#]+)/);
+    if (match) return match[1];
+    return null;
+  };
 
   btnYoutube?.addEventListener('click', async () => {
     const url = prompt('Enter YouTube video URL:');
     if (!url) return;
+
+    const videoId = extractYouTubeId(url);
+    if (!videoId) {
+      alert('Could not extract a YouTube video ID from that URL.');
+      return;
+    }
 
     console.log('[YouTube] Testing reachability via torFetch');
     try {
@@ -181,7 +263,20 @@ const initC64App = async () => {
       console.error('[YouTube] HEAD request failed:', err);
     }
 
-    alert('Loading YouTube video – not yet implemented: ' + url);
+    let iframe = document.getElementById('yt-embed');
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'yt-embed';
+      document.body.appendChild(iframe);
+    }
+
+    iframe.setAttribute('allow', 'autoplay');
+    iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&loop=1&mute=1&playlist=${videoId}`;
+
+    // Pause any local video playback to avoid audio overlap
+    if (bgVideo) {
+      bgVideo.pause();
+    }
   });
 
   btnSticker?.addEventListener('click', () => {
