@@ -3,8 +3,24 @@
    ------------------------------------------------------------------ */
 
 import * as Y from 'yjs';
-import * as fabric from 'fabric';
+import * as FabricNamespace from 'fabric';
 import { torFetch, setTorEnabled, torEnabled } from './lib/tor-client.js';
+
+const CanvasClass =
+  FabricNamespace.Canvas || (FabricNamespace.fabric && FabricNamespace.fabric.Canvas);
+const RectClass =
+  FabricNamespace.Rect || (FabricNamespace.fabric && FabricNamespace.fabric.Rect);
+const CircleClass =
+  FabricNamespace.Circle || (FabricNamespace.fabric && FabricNamespace.fabric.Circle);
+const PencilBrushClass =
+  FabricNamespace.PencilBrush ||
+  (FabricNamespace.fabric && FabricNamespace.fabric.PencilBrush);
+const FabricUtil =
+  FabricNamespace.util || (FabricNamespace.fabric && FabricNamespace.fabric.util);
+
+if (!CanvasClass || !RectClass || !CircleClass || !PencilBrushClass || !FabricUtil) {
+  console.error('[C64] Fabric.js core classes missing; drawing tools disabled.');
+}
 
 const generateStrokeId = () => {
   return 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
@@ -182,10 +198,17 @@ const initC64App = async () => {
   }
 
   // Fabric canvas – initialize
-  const canvas = new fabric.Canvas(whiteboardEl, {
-    isDrawingMode: true,
-    selection: false
-  });
+  const canvas = CanvasClass
+    ? new CanvasClass(whiteboardEl, {
+        isDrawingMode: true,
+        selection: false,
+      })
+    : null;
+
+  if (!canvas) {
+    console.error('[C64] Fabric canvas could not be created; aborting init.');
+    return;
+  }
 
   // Match the canvas backing size to the visible drawing area so drawing covers the full board.
   const resizeCanvas = () => {
@@ -210,6 +233,9 @@ const initC64App = async () => {
 
     canvas.setWidth(width);
     canvas.setHeight(height);
+    if (typeof canvas.calcOffset === 'function') {
+      canvas.calcOffset();
+    }
 
     whiteboardEl.width = width;
     whiteboardEl.height = height;
@@ -221,11 +247,10 @@ const initC64App = async () => {
   window.addEventListener('resize', resizeCanvas);
 
   // Ensure a drawing brush exists for Fabric v6
-  if (!canvas.freeDrawingBrush) {
+  if (!canvas.freeDrawingBrush && PencilBrushClass) {
     canvas.isDrawingMode = true;
     // PencilBrush is the default free drawing tool
-    // @ts-ignore - PencilBrush is available on the fabric namespace at runtime
-    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+    canvas.freeDrawingBrush = new PencilBrushClass(canvas);
   }
 
   canvas.freeDrawingBrush.width = 2;
@@ -247,8 +272,8 @@ const initC64App = async () => {
     const strokeColor = canvas.freeDrawingBrush?.color || userColor;
     const strokeWidth = canvas.freeDrawingBrush?.width || 2;
 
-    if (currentTool === 'rect') {
-      activeShape = new fabric.Rect({
+    if (currentTool === 'rect' && RectClass) {
+      activeShape = new RectClass({
         left: pointer.x,
         top: pointer.y,
         originX: 'left',
@@ -261,8 +286,8 @@ const initC64App = async () => {
         selectable: false,
         evented: false,
       });
-    } else if (currentTool === 'circle') {
-      activeShape = new fabric.Circle({
+    } else if (currentTool === 'circle' && CircleClass) {
+      activeShape = new CircleClass({
         left: pointer.x,
         top: pointer.y,
         originX: 'center',
@@ -337,9 +362,9 @@ const initC64App = async () => {
 
   // Helper to add an object from Yjs to Fabric
   const addObjectFromY = (key, data) => {
-    if (!data) return;
-    fabric.util.enlivenObjects([data], objs => {
-      objs.forEach(o => {
+    if (!data || !FabricUtil || !FabricUtil.enlivenObjects) return;
+    FabricUtil.enlivenObjects([data], (objs) => {
+      objs.forEach((o) => {
         o.id = key;
         if (data.authorColor) {
           o.set('stroke', data.authorColor);
