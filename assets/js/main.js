@@ -172,6 +172,7 @@ const initC64App = async () => {
   const input  = document.getElementById('msg-input');
   const bgVideo = document.getElementById('bg-video');
   const userIndicator = document.getElementById('user-indicator');
+  const toolbarEl = document.getElementById('toolbar');
 
   if (!whiteboardEl || !msgBox || !input) {
     console.error('C64 init error: missing core DOM elements', {
@@ -186,15 +187,33 @@ const initC64App = async () => {
     selection: false
   });
 
-  // Match the canvas backing size to the viewport so drawing covers the full board.
+  // Match the canvas backing size to the visible drawing area so drawing covers the full board.
   const resizeCanvas = () => {
-    const rect = whiteboardEl.getBoundingClientRect();
-    canvas.setWidth(rect.width);
-    canvas.setHeight(rect.height);
-    if (whiteboardEl instanceof HTMLCanvasElement) {
-      whiteboardEl.width = rect.width;
-      whiteboardEl.height = rect.height;
+    if (!(whiteboardEl instanceof HTMLCanvasElement)) {
+      return;
     }
+
+    const toolbarHeight = toolbarEl instanceof HTMLElement
+      ? toolbarEl.getBoundingClientRect().height
+      : 0;
+
+    const bottomOffset = Math.max(0, Math.round(toolbarHeight));
+
+    whiteboardEl.style.bottom = `${bottomOffset}px`;
+    if (bgVideo instanceof HTMLElement) {
+      bgVideo.style.bottom = `${bottomOffset}px`;
+    }
+
+    const rect = whiteboardEl.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width));
+    const height = Math.max(1, Math.round(rect.height));
+
+    canvas.setWidth(width);
+    canvas.setHeight(height);
+
+    whiteboardEl.width = width;
+    whiteboardEl.height = height;
+
     canvas.renderAll();
   };
 
