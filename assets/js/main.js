@@ -61,6 +61,7 @@ const initC64App = async () => {
   let canvasReady = false;
   let chatMessagesCount = 0;
   let videoState = 'none'; // 'none' | 'local' | 'youtube'
+  let currentTool = 'free';
 
   const renderConnectionStatus = () => {
     if (!connText) return;
@@ -132,6 +133,103 @@ const initC64App = async () => {
   canvas.freeDrawingBrush.color = userColor;
   canvasReady = true;
   renderConnectionStatus();
+
+  // Shape drawing state
+  let isDrawingShape = false;
+  let shapeOrigin = null;
+  let activeShape = null;
+
+  canvas.on('mouse:down', (opt) => {
+    if (currentTool === 'free') return;
+    const pointer = canvas.getPointer(opt.e);
+    isDrawingShape = true;
+    shapeOrigin = { x: pointer.x, y: pointer.y };
+
+    const strokeColor = canvas.freeDrawingBrush?.color || userColor;
+    const strokeWidth = canvas.freeDrawingBrush?.width || 2;
+
+    if (currentTool === 'rect') {
+      activeShape = new fabric.Rect({
+        left: pointer.x,
+        top: pointer.y,
+        originX: 'left',
+        originY: 'top',
+        width: 1,
+        height: 1,
+        fill: 'transparent',
+        stroke: strokeColor,
+        strokeWidth,
+        selectable: false,
+        evented: false,
+      });
+    } else if (currentTool === 'circle') {
+      activeShape = new fabric.Circle({
+        left: pointer.x,
+        top: pointer.y,
+        originX: 'center',
+        originY: 'center',
+        radius: 1,
+        fill: 'transparent',
+        stroke: strokeColor,
+        strokeWidth,
+        selectable: false,
+        evented: false,
+      });
+    } else {
+      return;
+    }
+
+    canvas.add(activeShape);
+  });
+
+  canvas.on('mouse:move', (opt) => {
+    if (!isDrawingShape || !activeShape || !shapeOrigin) return;
+    const pointer = canvas.getPointer(opt.e);
+
+    if (currentTool === 'rect') {
+      const width = pointer.x - shapeOrigin.x;
+      const height = pointer.y - shapeOrigin.y;
+      activeShape.set({
+        left: Math.min(pointer.x, shapeOrigin.x),
+        top: Math.min(pointer.y, shapeOrigin.y),
+        width: Math.abs(width),
+        height: Math.abs(height),
+      });
+    } else if (currentTool === 'circle') {
+      const dx = pointer.x - shapeOrigin.x;
+      const dy = pointer.y - shapeOrigin.y;
+      const radius = Math.sqrt(dx * dx + dy * dy);
+      activeShape.set({
+        radius,
+        left: shapeOrigin.x,
+        top: shapeOrigin.y,
+      });
+    }
+
+    canvas.requestRenderAll();
+  });
+
+  canvas.on('mouse:up', () => {
+    if (!isDrawingShape || !activeShape) {
+      isDrawingShape = false;
+      shapeOrigin = null;
+      return;
+    }
+
+    isDrawingShape = false;
+    shapeOrigin = null;
+
+    const id = generateStrokeId();
+    activeShape.set('id', id);
+    activeShape.set('authorId', clientId);
+    activeShape.set('authorColor', userColor);
+
+    const obj = activeShape.toObject(['stroke', 'strokeWidth', 'id', 'authorId', 'authorColor', 'radius', 'width', 'height']);
+    console.log('[Draw] shape created', { id, clientId, tool: currentTool, color: userColor });
+    yCanvas.set(id, obj);
+
+    activeShape = null;
+  });
 
   console.log('C64 canvas initialized');
 
@@ -222,6 +320,10 @@ const initC64App = async () => {
   const btnYoutube = document.getElementById('btn-youtube');
   const btnSticker = document.getElementById('btn-sticker');
   const btnGif     = document.getElementById('btn-gif');
+  const videoIndicator = document.getElementById('video-indicator');
+  const videoPlayPause = document.getElementById('video-play-pause');
+  const videoVolume = document.getElementById('video-volume');
+  const videoSeek = document.getElementById('video-seek');
 
   if (!btnClear || !btnTor || !brushColor || !brushSize || !shapeSel ||
       !btnUpload || !btnYoutube || !btnSticker || !btnGif) {
@@ -264,7 +366,10 @@ const initC64App = async () => {
   });
 
   shapeSel?.addEventListener('change', e => {
-    console.log('Shape selected:', e.target.value);
+    const value = e.target.value;
+    currentTool = value;
+    console.log('Shape selected:', value);
+    canvas.isDrawingMode = value === 'free';
   });
 
   let currentVideoObjectUrl = null;
@@ -367,7 +472,9 @@ const initC64App = async () => {
     }
 
     videoState = 'youtube';
+    currentVideoIndex = 0;
     renderConnectionStatus();
+    updateVideoIndicator();
   });
 
   btnSticker?.addEventListener('click', () => {
