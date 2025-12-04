@@ -4,7 +4,7 @@
 
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
-import { fabric } from 'fabric';
+import * as fabric from 'fabric';
 import { torFetch, setTorEnabled, torEnabled } from './lib/tor-client.js';
 
 const generateStrokeId = () => {
