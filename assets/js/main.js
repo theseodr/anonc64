@@ -268,6 +268,37 @@ const initC64App = async () => {
   });
 
   let currentVideoObjectUrl = null;
+  const videoQueue = [];
+
+  const playObjectUrl = (url) => {
+    if (!bgVideo || !url) return;
+    console.log('[Video] Playing background video.');
+    bgVideo.src = url;
+    bgVideo.play().catch(err => console.error('[Video] play() failed', err));
+    videoState = 'local';
+    renderConnectionStatus();
+  };
+
+  const playNextVideoInQueue = () => {
+    if (currentVideoObjectUrl) {
+      URL.revokeObjectURL(currentVideoObjectUrl);
+      currentVideoObjectUrl = null;
+    }
+    const nextUrl = videoQueue.shift();
+    if (!nextUrl) {
+      videoState = 'none';
+      renderConnectionStatus();
+      return;
+    }
+    currentVideoObjectUrl = nextUrl;
+    playObjectUrl(currentVideoObjectUrl);
+  };
+
+  if (bgVideo) {
+    bgVideo.addEventListener('ended', () => {
+      playNextVideoInQueue();
+    });
+  }
 
   btnUpload?.addEventListener('click', () => {
     if (!bgVideo) {
@@ -283,17 +314,18 @@ const initC64App = async () => {
       const file = fileInput.files && fileInput.files[0];
       if (!file) return;
 
-      if (currentVideoObjectUrl) {
-        URL.revokeObjectURL(currentVideoObjectUrl);
-        currentVideoObjectUrl = null;
-      }
+      const objectUrl = URL.createObjectURL(file);
 
-      currentVideoObjectUrl = URL.createObjectURL(file);
-      console.log('[Video] Loaded local file as background video.');
-      bgVideo.src = currentVideoObjectUrl;
-      bgVideo.play().catch(err => console.error('[Video] play() failed', err));
-      videoState = 'local';
-      renderConnectionStatus();
+      if (!currentVideoObjectUrl) {
+        // No active video, play immediately
+        currentVideoObjectUrl = objectUrl;
+        console.log('[Video] Loaded local file as background video.');
+        playObjectUrl(currentVideoObjectUrl);
+      } else {
+        // Queue for later playback
+        videoQueue.push(objectUrl);
+        console.log('[Video] Queued additional background video. Queue length:', videoQueue.length);
+      }
     });
 
     fileInput.click();
