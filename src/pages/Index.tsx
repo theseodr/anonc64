@@ -68,6 +68,8 @@ const extractYouTubeId = (input: string): string | null => {
 
 const DEFAULT_BOARD_TITLE = "Global C64 Board";
 
+const MAX_VIDEO_TILES = 3;
+
 const Index = () => {
   const [board, setBoard] = useState<Board | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -411,6 +413,11 @@ const Index = () => {
     event.preventDefault();
     if (!board || !youtubeLink.trim()) return;
 
+    if (videoTiles.length >= MAX_VIDEO_TILES) {
+      toast.error(`Maximum of ${MAX_VIDEO_TILES} video tiles reached. Remove one before adding another.`);
+      return;
+    }
+
     const videoId = extractYouTubeId(youtubeLink);
     if (!videoId) {
       toast.error("Please enter a valid YouTube URL or video ID.");
@@ -441,6 +448,12 @@ const Index = () => {
 
   const handleUploadVideo = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!board) return;
+
+    if (videoTiles.length >= MAX_VIDEO_TILES) {
+      toast.error(`Maximum of ${MAX_VIDEO_TILES} video tiles reached. Remove one before adding another.`);
+      event.target.value = "";
+      return;
+    }
 
     const file = event.target.files?.[0] ?? null;
     event.target.value = "";
@@ -539,6 +552,18 @@ const Index = () => {
     if (error) {
       console.error(error);
       toast.error("Failed to remove video tile.");
+    }
+  };
+
+  const handleClearVideos = async () => {
+    if (!board) return;
+
+    setVideoTiles([]);
+
+    const { error } = await supabase.from("video_tiles").delete().eq("board_id", board.id);
+    if (error) {
+      console.error(error);
+      toast.error("Failed to clear video tiles.");
     }
   };
 
@@ -697,7 +722,7 @@ const Index = () => {
           </div>
 
           <aside className="w-full space-y-4 lg:w-[340px]">
-            <Card className="flex h-[360px] flex-col border-border/70 bg-card/90">
+            <Card className="flex h-[420px] flex-col border-border/70 bg-card/90 sm:h-[520px] lg:h-[560px]">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-mono uppercase tracking-[0.22em]">Chat</CardTitle>
                 <CardDescription>Coordinate with others while you draw.</CardDescription>
@@ -715,7 +740,10 @@ const Index = () => {
                       return (
                         <div key={msg.id} className="rounded bg-card/80 px-2 py-1">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-primary">
+                            <span
+                              className="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-primary"
+                              title="RDNS: anonymous-c64-guest"
+                            >
                               Guest
                             </span>
                             <span className="text-[0.65rem] text-muted-foreground">{time}</span>
@@ -744,7 +772,7 @@ const Index = () => {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-mono uppercase tracking-[0.22em]">Board status</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-1 text-xs text-muted-foreground">
+              <CardContent className="space-y-2 text-xs text-muted-foreground">
                 <p>
                   <span className="font-mono uppercase tracking-[0.18em] text-foreground">Title:</span>{" "}
                   {board?.title ?? "Untitled"}
@@ -752,7 +780,29 @@ const Index = () => {
                 <p>
                   <span className="font-mono uppercase tracking-[0.18em] text-foreground">Visibility:</span> Public
                 </p>
-                <p>State persists in Lovable Cloud with realtime updates for strokes and chat.</p>
+                <p>
+                  <span className="font-mono uppercase tracking-[0.18em] text-foreground">Messages:</span>{" "}
+                  {messages.length}
+                </p>
+                <p>
+                  <span className="font-mono uppercase tracking-[0.18em] text-foreground">Video tiles:</span>{" "}
+                  {videoTiles.length} / {MAX_VIDEO_TILES}
+                </p>
+                <div className="pt-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 py-0 text-[0.65rem] font-mono uppercase tracking-[0.18em]"
+                    onClick={handleClearVideos}
+                    disabled={videoTiles.length === 0}
+                  >
+                    Clear all videos
+                  </Button>
+                </div>
+                <p className="pt-1 text-[0.68rem]">
+                  State persists in Lovable Cloud with realtime updates for strokes, chat, and video tiles.
+                </p>
               </CardContent>
             </Card>
           </aside>
