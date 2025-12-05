@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas } from "fabric";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Canvas as FabricCanvas, Circle, Rect } from "fabric";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,8 @@ interface Message {
   content: string;
   created_at: string;
   user_id: string | null;
+  ip?: string | null;
+  rdns?: string | null;
 }
 
 interface VideoTile {
@@ -31,6 +33,8 @@ interface VideoTile {
   width: number;
   height: number;
 }
+
+type Tool = "brush" | "rectangle" | "circle" | "eraser";
 
 const extractYouTubeId = (input: string): string | null => {
   const trimmed = input.trim();
@@ -70,6 +74,9 @@ const DEFAULT_BOARD_TITLE = "Global C64 Board";
 
 const MAX_VIDEO_TILES = 3;
 
+const FUNCTIONS_BASE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+const SEND_MESSAGE_URL = `${FUNCTIONS_BASE_URL}/send-message`;
+
 const Index = () => {
   const [board, setBoard] = useState<Board | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -79,7 +86,15 @@ const Index = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
+
+  const [activeTool, setActiveTool] = useState<Tool>("brush");
+  const [brushColor, setBrushColor] = useState("#00d7d7");
+  const [brushSize, setBrushSize] = useState(2);
+
   const dragPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const shapeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const shapeObjectRef = useRef<Rect | Circle | null>(null);
+
   const [videoTiles, setVideoTiles] = useState<VideoTile[]>([]);
   const [youtubeLink, setYoutubeLink] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -197,38 +212,161 @@ const Index = () => {
     loadLatestSnapshot();
   }, [board, fabricCanvas]);
 
+  const saveSnapshot = useCallback(async () => {
+    if (!board || !fabricCanvas) return;
+
+    try {
+      const json = fabricCanvas.toJSON();
+      const { error } = await supabase.from("strokes").insert({
+        board_id: board.id,
+        user_id: null,
+        path_data: json,
+        color: brushColor,
+        width: brushSize,
+      });
+      if (error) {
+        console.error(error);
+        toast.error("Failed to save stroke.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error while saving stroke.");
+    }
+  }, [board, fabricCanvas, brushColor, brushSize]);
+
   // Persist strokes on draw
   useEffect(() => {
     if (!board || !fabricCanvas) return;
 
-    const handlePathCreated = async () => {
-      try {
-        const json = fabricCanvas.toJSON();
-        const { error } = await supabase.from("strokes").insert({
-          board_id: board.id,
-          user_id: null,
-          path_data: json,
-          color: "#00d7d7",
-          width: 2,
-        });
-        if (error) {
-          console.error(error);
-          toast.error("Failed to save stroke.");
-        }
-      } catch (err) {
-        console.error(err);
-        toast.error("Error while saving stroke.");
-      }
+    const listener = () => {
+      void saveSnapshot();
     };
-
-    const listener = () => void handlePathCreated();
 
     fabricCanvas.on("path:created", listener as any);
 
     return () => {
       fabricCanvas.off("path:created", listener as any);
     };
-  }, [board, fabricCanvas]);
+  }, [board, fabricCanvas, saveSnapshot]);
+
+  // Synchronize Fabric drawing mode with the current tool and brush settings
+  useEffect(() => {
+    if (!fabricCanvas) return;
+
+    if (activeTool === "brush") {
+      fabricCanvas.isDrawingMode = true;
+      fabricCanvas.selection = false;
+
+      if (fabricCanvas.freeDrawingBrush) {
+        fabricCanvas.freeDrawingBrush.color = brushColor;
+        fabricCanvas.freeDrawingBrush.width = brushSize;
+      }
+    } else {
+      fabricCanvas.isDrawingMode = false;
+      fabricCanvas.selection = activeTool === "eraser";
+    }
+  }, [fabricCanvas, activeTool, brushColor, brushSize]);
+
+  // Rectangle, circle, and eraser tools
+  useEffect(() => {
+    if (!fabricCanvas) return;
+
+    const handleMouseDown = (opt: any) => {
+      if (!fabricCanvas) return;
+
+      if (activeTool === "rectangle" || activeTool === "circle") {
+        const evt = opt.e as MouseEvent;
+        const pointer = fabricCanvas.getPointer(evt);
+        shapeStartRef.current = { x: pointer.x, y: pointer.y };
+
+        if (activeTool === "rectangle") {
+          const rect = new Rect({
+            left: pointer.x,
+            top: pointer.y,
+            width: 0,
+            height: 0,
+            fill: "transparent",
+            stroke: brushColor,
+            strokeWidth: brushSize,
+            selectable: true,
+          });
+          shapeObjectRef.current = rect;
+          fabricCanvas.add(rect);
+        } else if (activeTool === "circle") {
+          const circle = new Circle({
+            left: pointer.x,
+            top: pointer.y,
+            radius: 0,
+            fill: "transparent",
+            stroke: brushColor,
+            strokeWidth: brushSize,
+            originX: "center",
+            originY: "center",
+            selectable: true,
+          });
+          shapeObjectRef.current = circle;
+          fabricCanvas.add(circle);
+        }
+      } else if (activeTool === "eraser") {
+        const target = opt.target;
+        if (target) {
+          fabricCanvas.remove(target);
+          fabricCanvas.requestRenderAll();
+          void saveSnapshot();
+        }
+      }
+    };
+
+    const handleMouseMove = (opt: any) => {
+      if (!fabricCanvas) return;
+      if (!shapeStartRef.current || !shapeObjectRef.current) return;
+      if (activeTool !== "rectangle" && activeTool !== "circle") return;
+
+      const evt = opt.e as MouseEvent;
+      const pointer = fabricCanvas.getPointer(evt);
+      const start = shapeStartRef.current;
+
+      if (activeTool === "rectangle") {
+        const rect = shapeObjectRef.current as Rect;
+        rect.set({
+          left: Math.min(start.x, pointer.x),
+          top: Math.min(start.y, pointer.y),
+          width: Math.abs(pointer.x - start.x),
+          height: Math.abs(pointer.y - start.y),
+        });
+        rect.setCoords();
+      } else if (activeTool === "circle") {
+        const circle = shapeObjectRef.current as Circle;
+        const radius = Math.sqrt((pointer.x - start.x) ** 2 + (pointer.y - start.y) ** 2) / 2;
+        circle.set({
+          left: (start.x + pointer.x) / 2,
+          top: (start.y + pointer.y) / 2,
+          radius,
+        });
+        circle.setCoords();
+      }
+
+      fabricCanvas.requestRenderAll();
+    };
+
+    const handleMouseUp = () => {
+      if (shapeObjectRef.current) {
+        shapeObjectRef.current = null;
+        shapeStartRef.current = null;
+        void saveSnapshot();
+      }
+    };
+
+    fabricCanvas.on("mouse:down", handleMouseDown);
+    fabricCanvas.on("mouse:move", handleMouseMove);
+    fabricCanvas.on("mouse:up", handleMouseUp);
+
+    return () => {
+      fabricCanvas.off("mouse:down", handleMouseDown);
+      fabricCanvas.off("mouse:move", handleMouseMove);
+      fabricCanvas.off("mouse:up", handleMouseUp);
+    };
+  }, [fabricCanvas, activeTool, brushColor, brushSize, saveSnapshot]);
 
   // Realtime updates for strokes
   useEffect(() => {
@@ -350,7 +488,7 @@ const Index = () => {
     const loadMessages = async () => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, content, created_at, user_id")
+        .select("*")
         .eq("board_id", board.id)
         .order("created_at", { ascending: true });
 
@@ -397,14 +535,24 @@ const Index = () => {
     const content = newMessage.trim();
     setNewMessage("");
 
-    const { error } = await supabase.from("messages").insert({
-      board_id: board.id,
-      user_id: null,
-      content,
-    });
+    try {
+      const response = await fetch(SEND_MESSAGE_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          board_id: board.id,
+          content,
+        }),
+      });
 
-    if (error) {
-      console.error(error);
+      if (!response.ok) {
+        console.error("send-message function failed", await response.text());
+        toast.error("Failed to send message.");
+      }
+    } catch (err) {
+      console.error(err);
       toast.error("Failed to send message.");
     }
   };
@@ -574,19 +722,7 @@ const Index = () => {
     fabricCanvas.set("backgroundColor", "transparent");
     fabricCanvas.renderAll();
 
-    const json = fabricCanvas.toJSON();
-    const { error } = await supabase.from("strokes").insert({
-      board_id: board.id,
-      user_id: null,
-      path_data: json,
-      color: "#00d7d7",
-      width: 2,
-    });
-
-    if (error) {
-      console.error(error);
-      toast.error("Failed to clear board state.");
-    }
+    await saveSnapshot();
   };
 
   if (initialising) {
@@ -711,11 +847,74 @@ const Index = () => {
                     ))}
                   </div>
                 </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Drawing mode: freehand (C64 teal)</span>
-                  <Button size="sm" variant="ghost" onClick={handleClearBoard}>
-                    Clear board (snapshot)
-                  </Button>
+                <div className="space-y-2 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-[0.68rem] uppercase tracking-[0.18em]">Tools:</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={activeTool === "brush" ? "default" : "outline"}
+                      className="h-7 px-2 text-[0.68rem] font-mono uppercase tracking-[0.18em]"
+                      onClick={() => setActiveTool("brush")}
+                    >
+                      Brush
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={activeTool === "rectangle" ? "default" : "outline"}
+                      className="h-7 px-2 text-[0.68rem] font-mono uppercase tracking-[0.18em]"
+                      onClick={() => setActiveTool("rectangle")}
+                    >
+                      Rect
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={activeTool === "circle" ? "default" : "outline"}
+                      className="h-7 px-2 text-[0.68rem] font-mono uppercase tracking-[0.18em]"
+                      onClick={() => setActiveTool("circle")}
+                    >
+                      Circle
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={activeTool === "eraser" ? "default" : "outline"}
+                      className="h-7 px-2 text-[0.68rem] font-mono uppercase tracking-[0.18em]"
+                      onClick={() => setActiveTool("eraser")}
+                    >
+                      Eraser
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-2">
+                      <span className="font-mono text-[0.65rem] uppercase tracking-[0.18em]">Color</span>
+                      <input
+                        type="color"
+                        value={brushColor}
+                        onChange={(event) => setBrushColor(event.target.value)}
+                        className="h-6 w-10 cursor-pointer rounded border border-border bg-background"
+                        aria-label="Brush color"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <span className="font-mono text-[0.65rem] uppercase tracking-[0.18em]">Brush</span>
+                      <input
+                        type="range"
+                        min={1}
+                        max={12}
+                        value={brushSize}
+                        onChange={(event) => setBrushSize(Number(event.target.value))}
+                        className="h-1 w-28 cursor-pointer accent-[hsl(var(--primary))]"
+                        aria-label="Brush size"
+                      />
+                      <span className="w-6 text-right text-[0.65rem]">{brushSize}</span>
+                    </label>
+                    <Button type="button" size="sm" variant="ghost" onClick={handleClearBoard}>
+                      Clear board
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -733,25 +932,26 @@ const Index = () => {
                     <p className="text-muted-foreground">No messages yet. Say hi!</p>
                   ) : (
                     messages.map((msg) => {
-                      const time = new Date(msg.created_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      });
-                      return (
-                        <div key={msg.id} className="rounded bg-card/80 px-2 py-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span
-                              className="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-primary"
-                              title="RDNS: anonymous-c64-guest"
-                            >
-                              Guest
-                            </span>
-                            <span className="text-[0.65rem] text-muted-foreground">{time}</span>
-                          </div>
-                          <p className="mt-0.5 text-[0.78rem] leading-snug">{msg.content}</p>
-                        </div>
-                      );
-                    })
+                       const time = new Date(msg.created_at).toLocaleTimeString([], {
+                         hour: "2-digit",
+                         minute: "2-digit",
+                       });
+                       const networkLabel = msg.rdns || msg.ip || "anonymous-c64-guest";
+                       return (
+                         <div key={msg.id} className="rounded bg-card/80 px-2 py-1">
+                           <div className="flex items-center justify-between gap-2">
+                             <span
+                               className="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-primary"
+                               title={networkLabel ? `RDNS: ${networkLabel}` : "RDNS: unknown"}
+                             >
+                               Guest
+                             </span>
+                             <span className="text-[0.65rem] text-muted-foreground">{time}</span>
+                           </div>
+                           <p className="mt-0.5 text-[0.78rem] leading-snug">{msg.content}</p>
+                         </div>
+                       );
+                     })
                   )}
                 </div>
                 <form className="flex items-center gap-2" onSubmit={handleSendMessage} aria-label="Send chat message">
